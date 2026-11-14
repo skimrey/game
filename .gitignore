@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+build/
+*.bundle.js
+*.min.js
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Runtime/Temporary
+*.tmp
+.cache/
+temp/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Generated files
+*.generated.js
+coverage/

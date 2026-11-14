@@ -98,7 +98,7 @@ export function createRenderer(canvas) {
     gl.drawArrays(gl.TRIANGLES, 0, 36);
   }
 
-  return (level, player) => {
+  return (level, player, particles = []) => {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     const width = Math.max(1, Math.floor(canvas.clientWidth * ratio));
     const height = Math.max(1, Math.floor(canvas.clientHeight * ratio));
@@ -114,5 +114,12 @@ export function createRenderer(canvas) {
     for (const p of level.platforms) box([p.x, p.y, p.z], [p.width, p.height, p.depth], [0.35, 0.65, 0.35]);
     box([level.goal.x, level.goal.y + 0.7, level.goal.z], [0.3, 1.4, 0.3], [1, 0.83, 0.15]);
     box([player.x, player.y + 0.75, player.z], [0.8, 1.5, 0.8], [0.9, 0.3, 0.25]);
+
+    // Render particles
+    for (const particle of particles) {
+      const alpha = particle.getAlpha();
+      const color = [particle.color[0] * alpha, particle.color[1] * alpha, particle.color[2] * alpha];
+      box([particle.x, particle.y, particle.z], [particle.size, particle.size, particle.size], color);
+    }
   };
 }
