@@ -1,8 +1,30 @@
 export const PLAYER = { halfWidth: 0.4, height: 1.5, speed: 5, jumpSpeed: 8 };
 const GRAVITY = 20;
 
+/**
+ * Traversal abilities (all optional inputs; without them the physics is unchanged):
+ *   dash   — mid-air dash: a short horizontal burst in the held direction (or the
+ *            facing direction), gravity paused while dashing; once per air time
+ *   pound  — ground pound: slam straight down; landing sends out a shockwave
+ */
+export const ABILITIES = { dashSpeed: 14, dashTime: 0.15, poundSpeed: 24 };
+
 export function createPlayer(spawn) {
-  return { ...spawn, vy: 0, grounded: false };
+  return {
+    ...spawn, vy: 0, grounded: false,
+    facingX: 0, facingZ: 1,
+    canDash: true, dash: 0, dashX: 0, dashZ: 0,
+    pound: false, landedPound: false,
+    push: 0, pushX: 0, pushZ: 0,
+  };
+}
+
+/** Knock the player back horizontally (vx, vz units/s) for `time` seconds. */
+export function pushPlayer(player, vx, vz, time) {
+  player.push = time;
+  player.pushX = vx;
+  player.pushZ = vz;
+  player.dash = 0;
 }
 
 function overlapsHorizontal(player, platform) {
@@ -10,15 +32,22 @@ function overlapsHorizontal(player, platform) {
     Math.abs(player.z - platform.z) < PLAYER.halfWidth + platform.depth / 2;
 }
 
+const CONTACT_EPSILON = 1e-9;
+
 function moveAxis(player, platforms, axis, distance) {
+  const start = player[axis];
   player[axis] += distance;
   for (const platform of platforms) {
     const bottom = platform.y - platform.height / 2;
     const top = platform.y + platform.height / 2;
     if (player.y < top && player.y + PLAYER.height > bottom && overlapsHorizontal(player, platform)) {
       const extent = (axis === 'x' ? platform.width : platform.depth) / 2 + PLAYER.halfWidth;
-      if (distance > 0) player[axis] = platform[axis] - extent;
-      if (distance < 0) player[axis] = platform[axis] + extent;
+      // Only push back if this move actually crossed the face on this axis.
+      // Otherwise an overlap caused by floating-point error on the *other*
+      // axis (e.g. resting exactly against a wall) would snap the player to
+      // the far side of the platform — a several-unit teleport.
+      if (distance > 0 && start <= platform[axis] - extent + CONTACT_EPSILON) player[axis] = platform[axis] - extent;
+      if (distance < 0 && start >= platform[axis] + extent - CONTACT_EPSILON) player[axis] = platform[axis] + extent;
     }
   }
 }
@@ -30,17 +59,50 @@ export function stepPlayer(player, level, input, dt) {
   if (length) {
     dx /= length;
     dz /= length;
+    player.facingX = dx;
+    player.facingZ = dz;
   }
-  moveAxis(player, level.platforms, 'x', dx * PLAYER.speed * dt);
-  moveAxis(player, level.platforms, 'z', dz * PLAYER.speed * dt);
+  player.landedPound = false;
+
+  // Abilities (air only)
+  if (input.dash && !player.grounded && player.canDash && !player.pound) {
+    player.canDash = false;
+    player.dash = ABILITIES.dashTime;
+    player.dashX = length ? dx : player.facingX;
+    player.dashZ = length ? dz : player.facingZ;
+    player.vy = 0;
+  }
+  if (input.pound && !player.grounded && !player.pound) {
+    player.pound = true;
+    player.dash = 0;
+    player.vy = -ABILITIES.poundSpeed;
+  }
+
+  // Horizontal movement: knockback > dash > ground pound (none) > walking
+  let mx = dx * PLAYER.speed, mz = dz * PLAYER.speed;
+  if (player.push > 0) {
+    mx = player.pushX; mz = player.pushZ;
+    player.push = Math.max(0, player.push - dt);
+  } else if (player.dash > 0) {
+    mx = player.dashX * ABILITIES.dashSpeed; mz = player.dashZ * ABILITIES.dashSpeed;
+  } else if (player.pound) {
+    mx = 0; mz = 0;
+  }
+  moveAxis(player, level.platforms, 'x', mx * dt);
+  moveAxis(player, level.platforms, 'z', mz * dt);
 
   if (input.jump && player.grounded) {
     player.vy = PLAYER.jumpSpeed;
     player.grounded = false;
   }
   const previousY = player.y;
-  player.vy -= GRAVITY * dt;
-  player.y += player.vy * dt;
+  if (player.dash > 0) {
+    player.dash -= dt; // gravity paused while dashing
+    if (player.dash < 1e-9) player.dash = 0;
+  } else {
+    player.vy -= GRAVITY * dt;
+    player.y += player.vy * dt;
+  }
   player.grounded = false;
   for (const platform of level.platforms) {
     if (!overlapsHorizontal(player, platform)) continue;
@@ -50,6 +112,8 @@ export function stepPlayer(player, level, input, dt) {
       player.y = top;
       player.vy = 0;
       player.grounded = true;
+      player.canDash = true;
+      if (player.pound) { player.pound = false; player.landedPound = true; }
     } else if (player.vy > 0 && previousY + PLAYER.height <= bottom &&
                player.y + PLAYER.height >= bottom) {
       player.y = bottom - PLAYER.height;

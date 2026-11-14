@@ -1,0 +1,776 @@
+{
+ "target": 30,
+ "machine": {
+  "cpus": 4,
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.60GHz"
+ },
+ "baseline": {
+  "config": {
+   "resolution": 1,
+   "antialias": 1,
+   "sky": "full",
+   "textures": 1,
+   "filtering": "high",
+   "scenery": "full"
+  },
+  "fps": 10.26518391787853,
+  "medianFps": 10.010010010010047,
+  "lowFps": 7.496251874062938,
+  "medianMs": 99.89999999999964,
+  "p95Ms": 133.40000000000055,
+  "frames": 84,
+  "canvas": [
+   1485,
+   692
+  ],
+  "resolution": 1,
+  "steal": 0.03506574827802129,
+  "quietStart": true,
+  "cpuMsPerFrame": 293.452380952381
+ },
+ "factors": [
+  {
+   "config": {
+    "resolution": 1,
+    "antialias": 0,
+    "sky": "full",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "full"
+   },
+   "fps": 16.82522794472418,
+   "medianFps": 15.015015015015344,
+   "lowFps": 12.004801920768282,
+   "medianMs": 66.59999999999854,
+   "p95Ms": 83.30000000000018,
+   "frames": 136,
+   "canvas": [
+    1485,
+    692
+   ],
+   "resolution": 1,
+   "steal": 0.057151780137414114,
+   "quietStart": true,
+   "cpuMsPerFrame": 144.33823529411762,
+   "label": "antialias off"
+  },
+  {
+   "config": {
+    "resolution": 1,
+    "antialias": 1,
+    "sky": "lite",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "full"
+   },
+   "fps": 10.144748237040703,
+   "medianFps": 10.0,
+   "lowFps": 8.56898029134531,
+   "medianMs": 100,
+   "p95Ms": 116.70000000000027,
+   "frames": 82,
+   "canvas": [
+    1485,
+    692
+   ],
+   "resolution": 1,
+   "steal": 0.053655475368685285,
+   "quietStart": true,
+   "cpuMsPerFrame": 285.7317073170729,
+   "label": "sky lite"
+  },
+  {
+   "config": {
+    "resolution": 1,
+    "antialias": 1,
+    "sky": "flat",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "full"
+   },
+   "fps": 12.469751592671244,
+   "medianFps": 12.004801920768314,
+   "lowFps": 10,
+   "medianMs": 83.29999999999995,
+   "p95Ms": 100,
+   "frames": 101,
+   "canvas": [
+    1485,
+    692
+   ],
+   "resolution": 1,
+   "steal": 0.02255400254129606,
+   "quietStart": true,
+   "cpuMsPerFrame": 227.821782178218,
+   "label": "sky flat"
+  },
+  {
+   "config": {
+    "resolution": 1,
+    "antialias": 1,
+    "sky": "full",
+    "textures": 0,
+    "filtering": "high",
+    "scenery": "full"
+   },
+   "fps": 14.227214806200593,
+   "medianFps": 14.992503748125978,
+   "lowFps": 11.990407673860899,
+   "medianMs": 66.69999999999982,
+   "p95Ms": 83.40000000000009,
+   "frames": 115,
+   "canvas": [
+    1485,
+    692
+   ],
+   "resolution": 1,
+   "steal": 0.004774029280712922,
+   "quietStart": true,
+   "cpuMsPerFrame": 211.0434782608699,
+   "label": "textures off"
+  },
+  {
+   "config": {
+    "resolution": 1,
+    "antialias": 1,
+    "sky": "full",
+    "textures": 1,
+    "filtering": "low",
+    "scenery": "full"
+   },
+   "fps": 10.207892443669861,
+   "medianFps": 10.0,
+   "lowFps": 7.507507507507518,
+   "medianMs": 100,
+   "p95Ms": 133.19999999999982,
+   "frames": 82,
+   "canvas": [
+    1485,
+    692
+   ],
+   "resolution": 1,
+   "steal": 0.04767959313413859,
+   "quietStart": true,
+   "cpuMsPerFrame": 279.0243902439024,
+   "label": "low texture filtering"
+  },
+  {
+   "config": {
+    "resolution": 1,
+    "antialias": 1,
+    "sky": "full",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "near"
+   },
+   "fps": 11.629201667677005,
+   "medianFps": 12.00480192076815,
+   "lowFps": 9.990009990010044,
+   "medianMs": 83.30000000000109,
+   "p95Ms": 100.09999999999945,
+   "frames": 94,
+   "canvas": [
+    1485,
+    692
+   ],
+   "resolution": 1,
+   "steal": 0.006012658227848101,
+   "quietStart": true,
+   "cpuMsPerFrame": 272.4468085106378,
+   "label": "scenery near"
+  },
+  {
+   "config": {
+    "resolution": 1,
+    "antialias": 1,
+    "sky": "full",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "none"
+   },
+   "fps": 13.971358714634999,
+   "medianFps": 14.992503748125978,
+   "lowFps": 11.990407673860833,
+   "medianMs": 66.69999999999982,
+   "p95Ms": 83.40000000000055,
+   "frames": 112,
+   "canvas": [
+    1485,
+    692
+   ],
+   "resolution": 1,
+   "steal": 0.018124006359300476,
+   "quietStart": true,
+   "cpuMsPerFrame": 224.99999999999991,
+   "label": "scenery none"
+  },
+  {
+   "config": {
+    "resolution": 0.75,
+    "antialias": 1,
+    "sky": "full",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "full"
+   },
+   "fps": 15.187352172289307,
+   "medianFps": 14.992503748125978,
+   "lowFps": 11.990407673860963,
+   "medianMs": 66.69999999999982,
+   "p95Ms": 83.39999999999964,
+   "frames": 122,
+   "canvas": [
+    1113,
+    519
+   ],
+   "resolution": 0.75,
+   "steal": 0.026856240126382307,
+   "quietStart": true,
+   "cpuMsPerFrame": 187.13114754098348,
+   "label": "resolution 75%"
+  },
+  {
+   "config": {
+    "resolution": 0.5,
+    "antialias": 1,
+    "sky": "full",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "full"
+   },
+   "fps": 22.53205527200299,
+   "medianFps": 20.0,
+   "lowFps": 19.960079840319217,
+   "medianMs": 50,
+   "p95Ms": 50.100000000000364,
+   "frames": 181,
+   "canvas": [
+    742,
+    346
+   ],
+   "resolution": 0.5,
+   "steal": 0.035635446231472724,
+   "quietStart": true,
+   "cpuMsPerFrame": 108.39779005524863,
+   "label": "resolution 50%"
+  }
+ ],
+ "search": [
+  {
+   "config": {
+    "resolution": 1,
+    "antialias": 0,
+    "sky": "full",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "full"
+   },
+   "fps": 19.33560370744608,
+   "medianFps": 20.0,
+   "lowFps": 14.992503748125978,
+   "medianMs": 50,
+   "p95Ms": 66.69999999999982,
+   "frames": 155,
+   "canvas": [
+    1485,
+    692
+   ],
+   "resolution": 1,
+   "steal": 0.008706868752015479,
+   "quietStart": true,
+   "cpuMsPerFrame": 129.16129032258053,
+   "label": "full detail \u00b7 100%"
+  },
+  {
+   "config": {
+    "resolution": 0.85,
+    "antialias": 0,
+    "sky": "full",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "full"
+   },
+   "fps": 23.65243371094236,
+   "medianFps": 20.040080160320606,
+   "lowFps": 19.9600798403194,
+   "medianMs": 49.90000000000009,
+   "p95Ms": 50.09999999999991,
+   "frames": 190,
+   "canvas": [
+    1262,
+    588
+   ],
+   "resolution": 0.85,
+   "steal": 0.0025591810620601407,
+   "quietStart": true,
+   "cpuMsPerFrame": 99.99999999999969,
+   "label": "full detail \u00b7 85%"
+  },
+  {
+   "config": {
+    "resolution": 0.75,
+    "antialias": 0,
+    "sky": "full",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "full"
+   },
+   "fps": 25.82238688671831,
+   "medianFps": 29.94011976047937,
+   "lowFps": 19.9600798403194,
+   "medianMs": 33.399999999999636,
+   "p95Ms": 50.09999999999991,
+   "frames": 207,
+   "canvas": [
+    1113,
+    519
+   ],
+   "resolution": 0.75,
+   "steal": 0.005162955792191029,
+   "quietStart": true,
+   "cpuMsPerFrame": 88.01932367149773,
+   "label": "full detail \u00b7 75%"
+  },
+  {
+   "config": {
+    "resolution": 0.65,
+    "antialias": 0,
+    "sky": "full",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "full"
+   },
+   "fps": 30.31206519578613,
+   "medianFps": 30.030030030029867,
+   "lowFps": 20,
+   "medianMs": 33.30000000000018,
+   "p95Ms": 50,
+   "frames": 244,
+   "canvas": [
+    965,
+    449
+   ],
+   "resolution": 0.65,
+   "steal": 0.0009606147934678194,
+   "quietStart": true,
+   "cpuMsPerFrame": 70.69672131147541,
+   "label": "full detail \u00b7 65%"
+  },
+  {
+   "config": {
+    "resolution": 0.55,
+    "antialias": 0,
+    "sky": "full",
+    "textures": 1,
+    "filtering": "high",
+    "scenery": "full"
+   },
+   "fps": 30.56052474657126,
+   "medianFps": 30.030030030029867,
+   "lowFps": 20,
+   "medianMs": 33.30000000000018,
+   "p95Ms": 50,
+   "frames": 246,
+   "canvas": [
+    816,
+    380
+   ],
+   "resolution": 0.55,
+   "steal": 0.036375239310784936,
+   "quietStart": true,
+   "cpuMsPerFrame": 63.17073170731739,
+   "label": "full detail \u00b7 55%"
+  },
+  {
+   "config": {
+    "resolution": 0.85,
+    "antialias": 0,
+    "sky": "lite",
+    "textures": 1,
+    "filtering": "low",
+    "scenery": "near"
+   },
+   "fps": 28.75602195914404,
+   "medianFps": 30.030030030029867,
+   "lowFps": 20,
+   "medianMs": 33.30000000000018,
+   "p95Ms": 50,
+   "frames": 231,
+   "canvas": [
+    1262,
+    588
+   ],
+   "resolution": 0.85,
+   "steal": 0.0061250805931656995,
+   "quietStart": true,
+   "cpuMsPerFrame": 75.28138528138521,
+   "label": "lite sky \u00b7 near scenery \u00b7 85%"
+  },
+  {
+   "config": {
+    "resolution": 0.75,
+    "antialias": 0,
+    "sky": "lite",
+    "textures": 1,
+    "filtering": "low",
+    "scenery": "near"
+   },
+   "fps": 26.515292975314637,
+   "medianFps": 29.94011976047937,
+   "lowFps": 19.960079840319217,
+   "medianMs": 33.399999999999636,
+   "p95Ms": 50.100000000000364,
+   "frames": 213,
+   "canvas": [
+    1113,
+    519
+   ],
+   "resolution": 0.75,
+   "steal": 0.07376020087884495,
+   "quietStart": true,
+   "cpuMsPerFrame": 70.56338028169002,
+   "label": "lite sky \u00b7 near scenery \u00b7 75%"
+  },
+  {
+   "config": {
+    "resolution": 0.65,
+    "antialias": 0,
+    "sky": "lite",
+    "textures": 1,
+    "filtering": "low",
+    "scenery": "near"
+   },
+   "fps": 39.5444282274865,
+   "medianFps": 30.12048192771101,
+   "lowFps": 29.94011976047896,
+   "medianMs": 33.19999999999982,
+   "p95Ms": 33.40000000000009,
+   "frames": 317,
+   "canvas": [
+    965,
+    449
+   ],
+   "resolution": 0.65,
+   "steal": 0.0006487187804086928,
+   "quietStart": true,
+   "cpuMsPerFrame": 49.526813880126326,
+   "label": "lite sky \u00b7 near scenery \u00b7 65%"
+  },
+  {
+   "config": {
+    "resolution": 0.55,
+    "antialias": 0,
+    "sky": "lite",
+    "textures": 1,
+    "filtering": "low",
+    "scenery": "near"
+   },
+   "fps": 42.07695850813529,
+   "medianFps": 59.88023952095548,
+   "lowFps": 29.94011976047896,
+   "medianMs": 16.700000000000728,
+   "p95Ms": 33.40000000000009,
+   "frames": 338,
+   "canvas": [
+    816,
+    380
+   ],
+   "resolution": 0.55,
+   "steal": 0.019317450096587252,
+   "quietStart": true,
+   "cpuMsPerFrame": 42.366863905325594,
+   "label": "lite sky \u00b7 near scenery \u00b7 55%"
+  },
+  {
+   "config": {
+    "resolution": 0.45,
+    "antialias": 0,
+    "sky": "lite",
+    "textures": 1,
+    "filtering": "low",
+    "scenery": "near"
+   },
+   "fps": 34.607675932726664,
+   "medianFps": 30.030030030030687,
+   "lowFps": 19.9600798403194,
+   "medianMs": 33.29999999999927,
+   "p95Ms": 50.09999999999991,
+   "frames": 278,
+   "canvas": [
+    668,
+    311
+   ],
+   "resolution": 0.45,
+   "steal": 0.10875662200062325,
+   "quietStart": true,
+   "cpuMsPerFrame": 41.438848920863244,
+   "label": "lite sky \u00b7 near scenery \u00b7 45%"
+  }
+ ],
+ "floor": {
+  "config": {
+   "resolution": 0.35
+  },
+  "fps": 56.010179132777814,
+  "medianFps": 59.88023952095874,
+  "lowFps": 59.88023952095548,
+  "medianMs": 16.699999999999818,
+  "p95Ms": 16.700000000000728,
+  "frames": 449,
+  "canvas": [
+   519,
+   242
+  ],
+  "resolution": null,
+  "steal": 0.029449018366054465,
+  "quietStart": true,
+  "cpuMsPerFrame": 12.160356347438771
+ },
+ "confirm": [
+  {
+   "label": "lite sky \u00b7 near scenery \u00b7 65%",
+   "config": {
+    "resolution": 0.65,
+    "antialias": 0,
+    "sky": "lite",
+    "textures": 1,
+    "filtering": "low",
+    "scenery": "near"
+   },
+   "runs": [
+    {
+     "config": {
+      "resolution": 0.65,
+      "antialias": 0,
+      "sky": "lite",
+      "textures": 1,
+      "filtering": "low",
+      "scenery": "near"
+     },
+     "fps": 28.691540985242572,
+     "medianFps": 30.030030030029867,
+     "lowFps": 20,
+     "medianMs": 33.30000000000018,
+     "p95Ms": 50,
+     "frames": 230,
+     "canvas": [
+      965,
+      449
+     ],
+     "resolution": 0.65,
+     "steal": 0.11585175957645594,
+     "quietStart": true,
+     "cpuMsPerFrame": 60.60869565217366
+    },
+    {
+     "config": {
+      "resolution": 0.65,
+      "antialias": 0,
+      "sky": "lite",
+      "textures": 1,
+      "filtering": "low",
+      "scenery": "near"
+     },
+     "fps": 31.55397095543933,
+     "medianFps": 30.030030030029867,
+     "lowFps": 20,
+     "medianMs": 33.30000000000018,
+     "p95Ms": 50,
+     "frames": 254,
+     "canvas": [
+      965,
+      449
+     ],
+     "resolution": 0.65,
+     "steal": 0.06295247088448222,
+     "quietStart": true,
+     "cpuMsPerFrame": 57.480314960630004
+    },
+    {
+     "config": {
+      "resolution": 0.65,
+      "antialias": 0,
+      "sky": "lite",
+      "textures": 1,
+      "filtering": "low",
+      "scenery": "near"
+     },
+     "fps": 33.307136708955504,
+     "medianFps": 30.030030030029867,
+     "lowFps": 20,
+     "medianMs": 33.30000000000018,
+     "p95Ms": 50,
+     "frames": 267,
+     "canvas": [
+      965,
+      449
+     ],
+     "resolution": 0.65,
+     "steal": 0.038560411311053984,
+     "quietStart": true,
+     "cpuMsPerFrame": 56.55430711610495
+    }
+   ],
+   "worst": {
+    "config": {
+     "resolution": 0.65,
+     "antialias": 0,
+     "sky": "lite",
+     "textures": 1,
+     "filtering": "low",
+     "scenery": "near"
+    },
+    "fps": 28.691540985242572,
+    "medianFps": 30.030030030029867,
+    "lowFps": 20,
+    "medianMs": 33.30000000000018,
+    "p95Ms": 50,
+    "frames": 230,
+    "canvas": [
+     965,
+     449
+    ],
+    "resolution": 0.65,
+    "steal": 0.11585175957645594,
+    "quietStart": true,
+    "cpuMsPerFrame": 60.60869565217366
+   },
+   "passesAll": false
+  },
+  {
+   "label": "lite sky \u00b7 near scenery \u00b7 55%",
+   "config": {
+    "resolution": 0.55,
+    "antialias": 0,
+    "sky": "lite",
+    "textures": 1,
+    "filtering": "low",
+    "scenery": "near"
+   },
+   "runs": [
+    {
+     "config": {
+      "resolution": 0.55,
+      "antialias": 0,
+      "sky": "lite",
+      "textures": 1,
+      "filtering": "low",
+      "scenery": "near"
+     },
+     "fps": 38.83930238637637,
+     "medianFps": 30.12048192771101,
+     "lowFps": 29.94011976047896,
+     "medianMs": 33.19999999999982,
+     "p95Ms": 33.40000000000009,
+     "frames": 312,
+     "canvas": [
+      816,
+      380
+     ],
+     "resolution": 0.55,
+     "steal": 0.005840363400389357,
+     "quietStart": true,
+     "cpuMsPerFrame": 46.60256410256399
+    },
+    {
+     "config": {
+      "resolution": 0.55,
+      "antialias": 0,
+      "sky": "lite",
+      "textures": 1,
+      "filtering": "low",
+      "scenery": "near"
+     },
+     "fps": 40.41714485305125,
+     "medianFps": 59.52380952380888,
+     "lowFps": 29.940119760478552,
+     "medianMs": 16.800000000000182,
+     "p95Ms": 33.400000000000546,
+     "frames": 324,
+     "canvas": [
+      816,
+      380
+     ],
+     "resolution": 0.55,
+     "steal": 0.0044943820224719105,
+     "quietStart": true,
+     "cpuMsPerFrame": 46.51234567901215
+    },
+    {
+     "config": {
+      "resolution": 0.55,
+      "antialias": 0,
+      "sky": "lite",
+      "textures": 1,
+      "filtering": "low",
+      "scenery": "near"
+     },
+     "fps": 46.77968638898245,
+     "medianFps": 59.88023952095874,
+     "lowFps": 29.94011976047896,
+     "medianMs": 16.699999999999818,
+     "p95Ms": 33.40000000000009,
+     "frames": 375,
+     "canvas": [
+      816,
+      380
+     ],
+     "resolution": 0.55,
+     "steal": 0.00032123353678124,
+     "quietStart": true,
+     "cpuMsPerFrame": 41.41333333333326
+    }
+   ],
+   "worst": {
+    "config": {
+     "resolution": 0.55,
+     "antialias": 0,
+     "sky": "lite",
+     "textures": 1,
+     "filtering": "low",
+     "scenery": "near"
+    },
+    "fps": 38.83930238637637,
+    "medianFps": 30.12048192771101,
+    "lowFps": 29.94011976047896,
+    "medianMs": 33.19999999999982,
+    "p95Ms": 33.40000000000009,
+    "frames": 312,
+    "canvas": [
+     816,
+     380
+    ],
+    "resolution": 0.55,
+    "steal": 0.005840363400389357,
+    "quietStart": true,
+    "cpuMsPerFrame": 46.60256410256399
+   },
+   "passesAll": true
+  }
+ ],
+ "recommended": {
+  "config": {
+   "resolution": 0.55,
+   "antialias": 0,
+   "sky": "lite",
+   "textures": 1,
+   "filtering": "low",
+   "scenery": "near"
+  },
+  "fps": 38.83930238637637,
+  "medianFps": 30.12048192771101,
+  "lowFps": 29.94011976047896,
+  "medianMs": 33.19999999999982,
+  "p95Ms": 33.40000000000009,
+  "frames": 312,
+  "canvas": [
+   816,
+   380
+  ],
+  "resolution": 0.55,
+  "steal": 0.005840363400389357,
+  "quietStart": true,
+  "cpuMsPerFrame": 46.60256410256399,
+  "label": "lite sky \u00b7 near scenery \u00b7 55%"
+ }
+}

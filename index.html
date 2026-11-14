@@ -9,10 +9,14 @@
 <body>
   <main>
     <canvas id="game" aria-label="3D platformer game"></canvas>
+    <div id="tier-banner" class="tier-banner" aria-hidden="true">
+      <span class="tier-label"></span>
+      <span class="tier-name"></span>
+    </div>
     <div class="hud">
       <h1>Platformer outline</h1>
       <p id="status" aria-live="polite">Loading…</p>
-      <p>WASD / arrow keys to move · Space to jump · R to restart</p>
+      <p>WASD / arrows move · Space jump · Shift/J air dash · Q/K ground pound · R restart</p>
     </div>
   </main>
   <script type="module" src="./src/main.js"></script>

@@ -6,7 +6,7 @@ A robust, dependency-free browser-based 3D platformer with WebGL rendering, mult
 
 - **WebGL Rendering**: Smooth 3D graphics with a following camera system
 - **Physics Engine**: Gravity, jumping, collision detection, and fall detection
-- **Multiple Levels**: 6 progressively challenging levels with varied platform layouts
+- **Multiple Levels**: 12 levels (6 hand-made + 6 generated), all proven completable by the level audit
 - **Input Management**: Support for WASD/Arrow keys and gamepad input
 - **Particle System**: Visual effects for game events
 - **Audio Manager**: Framework for sound effects and music (no dependencies)
@@ -17,9 +17,31 @@ A robust, dependency-free browser-based 3D platformer with WebGL rendering, mult
 
 ## Quick Start
 
-### Run the Game
+### Run the Game (recommended: live reload)
 
-From the project directory, start a static server:
+```sh
+npm run dev                                   # play: normal resolution/quality, opens the game
+npm run dev:test                              # testing mode: low resolution, ≥ 30 fps, opens the playground
+node scripts/dev-server.mjs --open index.html --quality test   # any page, any preset
+```
+
+Rendering presets (URL `?quality=…`, see `src/quality.js` and `perf/README.md`):
+
+| Preset | For | Settings |
+|---|---|---|
+| `normal` (default) | playing on a machine with a GPU | full resolution (up to 2× HiDPI), MSAA, full sky, all scenery, trilinear + anisotropic textures |
+| `test` | testing on machines without a GPU (e.g. the VM) | 55% resolution with **adaptive quality** (resolution 35–80%, then sheds sky/scenery detail if needed; holds 30 fps), no MSAA, lite sky, near scenery, cheaper filtering, FPS badge |
+
+Single settings can be overridden in the URL, e.g. `?quality=test&resolution=0.7&sky=full`.
+On machines without a GPU the dev server launches Chrome with `--disable-gpu-compositing`
+(force with `--software` / `--gpu`) — this alone more than halves Chrome's per-frame cost.
+`npm run bench` re-measures everything in a visible Chrome window and rewrites `perf/README.md`.
+
+The dev server reloads open pages on every file edit and reopens Chrome on the next edit if the
+window was closed. Chrome is found via `CHROME_PATH`, standard install locations or Playwright's
+Chromium (no dependencies).
+
+Or start a plain static server:
 
 ```sh
 python3 -m http.server 8000
@@ -31,14 +53,17 @@ Open <http://localhost:8000> in a WebGL-capable browser.
 
 - **Move**: WASD or Arrow Keys
 - **Jump**: Space
+- **Air dash**: Shift or J (in the air, once per jump — refreshed by landing or stomping)
+- **Ground pound**: Q or K (in the air — slam down; the landing shockwave defeats nearby enemies)
 - **Restart Level**: R
-- **Pause**: P (framework ready, not implemented in base game)
 
 ### Gamepad Support
 
 The game detects and supports standard gamepads:
 - **Left Stick**: Movement
 - **Button 0 (A/Cross)**: Jump
+- **Button 2 (X/Square)**: Air dash
+- **Button 1 (B/Circle)**: Ground pound
 
 ## Project Structure
 
@@ -56,9 +81,53 @@ src/
 ├── levelBuilder.js      # Level creation utilities and validation
 ├── math.js              # 3D math utilities and helpers
 ├── performance.js       # Performance monitoring tools
+├── avatar.js            # Player avatar: model, procedural animation, shadow
+├── levelAudit.js        # Completability proof (bot in real physics) + quality rules
+├── levelGenerator.js    # Seeded, pattern-based level generator with audit gate
+├── levelLab.js          # Level Lab page (levels.html)
+├── biomes.js            # Per-tier environments: sky, fog, light, materials, scenery kit
+├── materials.js         # Material → texture mapping (+ swatches for colour checks)
+├── textures.js          # Procedural canvas textures (browser)
+├── scenery.js           # Decoration kits, safe placement and the scenery audit
+├── visualAudit.js       # Readability / unique-background checks (CIE ΔE)
+├── environment.js       # Resolves tier → biome → scenery for a level (cached)
+├── camera.js            # Chase camera shared by renderer and checks
+├── quality.js           # Rendering presets (normal / test) + URL overrides
+├── fpsMeter.js          # FPS badge + benchmark recorder
+├── controls.js          # Keyboard/gamepad with edge-triggered jump/dash/pound
+├── session.js           # Game rules: health, enemies, stomps, dash hits, shockwave, checkpoints
+├── enemies.js           # Crawler / spiker / wisp: deterministic motion + looks
+├── encounterAudit.js    # Enemy placement rules + combat bot fairness check
+├── effects.js           # Particle effects for gameplay events
+├── hud.js               # Hearts + dash indicator
+├── mat4.js              # Column-major 4x4 matrix helpers
+├── playground.js        # Avatar playground sandbox (playground.html)
 ```
 
-## Architecture
+## Player Avatar & Playground
+
+The player is drawn as a jointed, box-built character (`src/avatar.js`) instead of a plain box.
+It is purely visual — the physics body is unchanged — and is fully procedurally animated:
+
+- **Idle**: breathing, arm sway, blinking, looks around after standing still
+- **Run**: distance-driven stride with knees/elbows, torso twist, forward lean, banking into turns;
+  feet are auto-planted on the ground (no sliding/sinking)
+- **Air**: separate rising (tucked) and falling (arms out) poses blended by vertical velocity
+- **Jump / land**: squash & stretch spring + landing crouch scaled by impact speed
+- **Respawn**: pop-in with overshoot
+- Smooth turning toward the movement direction, blob drop shadow, dust puffs on steps/jumps/landings
+
+### Playground
+
+Open <http://localhost:8000/playground.html> to evaluate the avatar in a sandbox arena
+(stairs + high ledge, wall, hurdle, head-bonk block, pit and island). The side panel offers:
+
+- live animation state readout (state, speed, vy, facing, blend weights, squash)
+- forced animation previews (idle / run / rise / fall) played in place
+- game camera or orbit camera (drag to rotate, wheel to zoom, *Face avatar* / *Side view* presets)
+- slow motion, pause (P) and frame step (N)
+- outfit presets, physics hitbox overlay (H), shadow/dust toggles, and a legacy red-box comparison
+
 
 ### Core Systems
 

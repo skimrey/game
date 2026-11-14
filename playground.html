@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Avatar Playground</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./playground.css">
+</head>
+<body>
+  <main>
+    <canvas id="game" aria-label="Avatar playground"></canvas>
+
+    <div class="hud">
+      <h1>Avatar Playground</h1>
+      <p id="status" aria-live="polite">Loading…</p>
+      <p>WASD move · Space jump · Shift/J air dash · Q/K ground pound · R reset · P pause · N step · C camera · H hitbox</p>
+    </div>
+
+    <aside class="panel" id="panel">
+      <section>
+        <h2>Live state</h2>
+        <dl class="readout">
+          <dt>Animation</dt><dd id="ro-state">–</dd>
+          <dt>Speed</dt><dd id="ro-speed">–</dd>
+          <dt>Vertical v</dt><dd id="ro-vy">–</dd>
+          <dt>Grounded</dt><dd id="ro-grounded">–</dd>
+          <dt>Facing</dt><dd id="ro-yaw">–</dd>
+          <dt>Run / Air blend</dt><dd id="ro-blend">–</dd>
+          <dt>Squash</dt><dd id="ro-squash">–</dd>
+          <dt>FPS</dt><dd id="ro-fps">–</dd>
+        </dl>
+      </section>
+
+      <section>
+        <h2>Animation preview</h2>
+        <div class="segmented" id="preview">
+          <button data-value="live" class="active">Live</button>
+          <button data-value="idle">Idle</button>
+          <button data-value="run">Run</button>
+          <button data-value="jump">Rise</button>
+          <button data-value="fall">Fall</button>
+        </div>
+        <p class="hint">Forced previews play in place — use Orbit to inspect.</p>
+      </section>
+
+      <section>
+        <h2>Camera</h2>
+        <div class="segmented" id="camera">
+          <button data-value="follow" class="active">Game</button>
+          <button data-value="orbit">Orbit</button>
+        </div>
+        <div class="row">
+          <button id="front-view">Face avatar</button>
+          <button id="side-view">Side view</button>
+        </div>
+        <p class="hint">Orbit: drag to rotate, wheel to zoom. Movement becomes camera-relative.</p>
+      </section>
+
+      <section>
+        <h2>Time</h2>
+        <label class="slider">Speed <span id="time-label">1.00×</span>
+          <input type="range" id="time-scale" min="0.05" max="1.5" step="0.05" value="1">
+        </label>
+        <div class="row">
+          <button id="pause">Pause</button>
+          <button id="step">Step ▸</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Outfit</h2>
+        <div class="swatches" id="palettes"></div>
+      </section>
+
+      <section>
+        <h2>Environment</h2>
+        <select id="biome" class="select"></select>
+      </section>
+
+      <section>
+        <h2>Display</h2>
+        <label class="check"><input type="checkbox" id="opt-hitbox"> Physics hitbox</label>
+        <label class="check"><input type="checkbox" id="opt-shadow" checked> Drop shadow</label>
+        <label class="check"><input type="checkbox" id="opt-dust" checked> Dust particles</label>
+        <label class="check"><input type="checkbox" id="opt-legacy"> Legacy box (compare)</label>
+      </section>
+
+      <section class="row">
+        <button id="reset">Reset (R)</button>
+        <a class="button" href="./index.html">Play game →</a>
+      </section>
+    </aside>
+  </main>
+  <script type="module" src="./src/playground.js"></script>
+</body>
+</html>

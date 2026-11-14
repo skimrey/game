@@ -1,0 +1,43 @@
+.panel select, .panel input[type=number] {
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #0f172a;
+  color: inherit;
+  font: inherit;
+}
+.generator { margin-top: 8px; }
+.generator[hidden] { display: none; }
+.field { display: block; margin-bottom: 6px; }
+.badge {
+  float: right;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #334155;
+  color: #fff;
+  letter-spacing: 0.04em;
+}
+.badge.pass { background: #16a34a; }
+.badge.warn { background: #d97706; }
+.badge.fail { background: #dc2626; }
+.issues { margin: 8px 0 4px; padding: 0; list-style: none; font-size: 12px; }
+.issues li { margin: 3px 0; padding: 4px 6px; border-radius: 4px; background: rgba(148, 163, 184, 0.12); }
+.issues li.error { background: rgba(220, 38, 38, 0.25); }
+.issues li.warning { background: rgba(217, 119, 6, 0.25); }
+.issues code { font-weight: 700; }
+.route { margin: 4px 0 0; padding-left: 22px; font-size: 12px; font-variant-numeric: tabular-nums; }
+details summary { cursor: pointer; color: #94a3b8; font-size: 12px; }
+.labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.labels span {
+  position: absolute;
+  transform: translate(-50%, -120%);
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.7);
+  color: #fff;
+  font: 600 11px/1.5 system-ui, sans-serif;
+}
+.labels span.route { background: rgba(37, 99, 235, 0.85); }
+.labels span.goal { background: rgba(202, 138, 4, 0.95); }
+.labels span.false-path { background: rgba(234, 88, 12, 0.9); }

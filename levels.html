@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Level Lab</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./playground.css">
+  <link rel="stylesheet" href="./levels.css">
+</head>
+<body>
+  <main>
+    <canvas id="game" aria-label="Level lab"></canvas>
+    <div id="labels" class="labels" aria-hidden="true"></div>
+
+    <div class="hud">
+      <h1 id="title">Level Lab</h1>
+      <p id="status" aria-live="polite">Loading…</p>
+      <p>WASD move · Space jump · Shift/J dash · Q/K pound · R restart · B watch bot · O overview · drag to orbit</p>
+    </div>
+
+    <aside class="panel">
+      <section>
+        <h2>Level</h2>
+        <select id="level-select"></select>
+        <div id="generator" class="generator">
+          <label class="field">Seed <input type="number" id="seed" value="1" min="1" step="1"></label>
+          <label class="slider">Difficulty <span id="difficulty-label">0.50</span>
+            <input type="range" id="difficulty" min="0" max="1" step="0.05" value="0.5">
+          </label>
+          <div class="row">
+            <button id="prev-seed">◂ Seed</button>
+            <button id="random-seed">Random</button>
+            <button id="next-seed">Seed ▸</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Audit <span id="badge" class="badge">–</span></h2>
+        <dl class="readout" id="metrics"></dl>
+        <ul class="issues" id="issues"></ul>
+        <details>
+          <summary>Route &amp; segments</summary>
+          <p class="hint" id="segments"></p>
+          <ol class="route" id="route"></ol>
+        </details>
+      </section>
+
+      <section>
+        <h2>Mode</h2>
+        <div class="segmented" id="mode">
+          <button data-value="play" class="active">Play</button>
+          <button data-value="bot">Watch bot</button>
+        </div>
+        <div class="segmented" id="camera">
+          <button data-value="follow" class="active">Game cam</button>
+          <button data-value="orbit">Orbit</button>
+          <button data-value="overview">Overview</button>
+        </div>
+        <label class="slider">Bot speed <span id="bot-speed-label">1×</span>
+          <input type="range" id="bot-speed" min="0.25" max="4" step="0.25" value="1">
+        </label>
+      </section>
+
+      <section>
+        <h2>Environment</h2>
+        <select id="biome"><option value="">Tier default</option></select>
+      </section>
+
+      <section>
+        <h2>Overlays</h2>
+        <label class="check"><input type="checkbox" id="opt-path" checked> Bot trajectory</label>
+        <label class="check"><input type="checkbox" id="opt-labels" checked> Platform numbers</label>
+      </section>
+
+      <section class="row">
+        <a class="button" id="open-game" href="./index.html">Play in game →</a>
+        <a class="button" href="./playground.html">Avatar playground</a>
+      </section>
+    </aside>
+  </main>
+  <script type="module" src="./src/levelLab.js"></script>
+</body>
+</html>

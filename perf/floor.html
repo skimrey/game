@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Render floor</title>
+  <style>html, body { margin: 0; height: 100%; background: #000; } canvas { display: block; width: 100%; height: 100%; }</style>
+</head>
+<body>
+  <!-- Diagnostic: the cheapest possible frame (clear a full-window WebGL canvas).
+       Its cost is the browser's fixed per-frame overhead (compositing etc.). -->
+  <canvas id="c"></canvas>
+  <script type="module">
+    import { createFpsMeter } from '../src/fpsMeter.js';
+    const params = new URLSearchParams(location.search);
+    const scale = Number(params.get('resolution') || 0.35);
+    const canvas = document.getElementById('c');
+    const gl = canvas.getContext('webgl', { antialias: false });
+    const meter = createFpsMeter({ showFps: false }, { canvas });
+    function frame(t) {
+      canvas.width = Math.floor(canvas.clientWidth * scale);
+      canvas.height = Math.floor(canvas.clientHeight * scale);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clearColor((t / 3000) % 1, 0.4, 0.6, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      meter.frame(t);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    meter.startBench(Number(params.get('bench') || 8));
+  </script>
+</body>
+</html>

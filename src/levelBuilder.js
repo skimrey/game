@@ -23,6 +23,18 @@ export class LevelBuilder {
     return this;
   }
 
+  /** Add an enemy (see enemies.js): { type, platform, axis, speed, phase } or { type: 'wisp', from, to, … }. */
+  addEnemy(enemy) {
+    (this.level.enemies ||= []).push(enemy);
+    return this;
+  }
+
+  /** Design difficulty 0..1 — scales the fun requirements (see funAudit.js). */
+  setDifficulty(difficulty) {
+    this.level.meta = { ...(this.level.meta || {}), difficulty, handmade: true };
+    return this;
+  }
+
   setGoal(x, y, z, radius = 1) {
     this.level.goal = { x, y, z, radius };
     return this;
@@ -59,7 +71,9 @@ export function createLevel(name) {
 }
 
 /**
- * Validate level data
+ * Quick structural check of level data.
+ * For a full audit (completability proven by a bot in the real physics,
+ * fairness and quality rules) use `auditLevel` from levelAudit.js.
  */
 export function validateLevel(level) {
   const errors = [];

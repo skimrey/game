@@ -4,7 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "dev": "node scripts/dev-server.mjs --open index.html",
+    "dev:test": "node scripts/dev-server.mjs --open playground.html --quality test",
+    "test": "node --test",
+    "levels:report": "node scripts/level-report.mjs",
+    "levels:pick": "node scripts/pick-campaign.mjs",
+    "visuals:verify": "python3 scripts/verify_visuals.py",
+    "bench": "python3 scripts/bench_quality.py"
   },
   "license": "MIT"
 }
