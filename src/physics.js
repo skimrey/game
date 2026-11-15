@@ -3,17 +3,30 @@ const GRAVITY = 20;
 
 /**
  * Traversal abilities (all optional inputs; without them the physics is unchanged):
- *   dash   — mid-air dash: a short horizontal burst in the held direction (or the
- *            facing direction), gravity paused while dashing; once per air time
- *   pound  — ground pound: slam straight down; landing sends out a shockwave
+ *   dash    — mid-air dash: a short horizontal burst in the held direction (or the
+ *             facing direction), gravity paused while dashing; once per air time
+ *   pound   — ground pound: slam straight down; landing sends out a shockwave
+ *   glide   — hold jump while falling: you sink slowly (GLIDE_FALL) — long gaps on the way down
+ *   double  — press jump again in mid-air: a second, slightly weaker jump; once per air time
+ * and a terrain feature:
+ *   spring  — a platform with `spring: true` is a bounce pad: landing on it launches you
+ *             high (SPRING_SPEED), refreshing the dash and the double jump
+ *
+ * Which abilities a level allows is `level.abilities` (a list of 'dash' | 'glide' | 'double';
+ * levels without the field allow the dash only) — each region teaches a new one, and the
+ * level audit plans routes with exactly the moves the level allows.
  */
-export const ABILITIES = { dashSpeed: 14, dashTime: 0.15, poundSpeed: 24 };
+export const ABILITIES = { dashSpeed: 14, dashTime: 0.15, poundSpeed: 24, glideFall: 2.2, doubleSpeed: 7.5, springSpeed: 13 };
+export const DEFAULT_ABILITIES = ['dash'];
+export const abilitiesOf = level => level?.abilities || DEFAULT_ABILITIES;
+const allows = (level, ability) => abilitiesOf(level).includes(ability);
 
 export function createPlayer(spawn) {
   return {
     ...spawn, vy: 0, grounded: false,
     facingX: 0, facingZ: 1,
     canDash: true, dash: 0, dashX: 0, dashZ: 0,
+    canDouble: true, doubled: false, gliding: false, sprung: null,
     pound: false, landedPound: false,
     push: 0, pushX: 0, pushZ: 0,
   };
@@ -63,9 +76,11 @@ export function stepPlayer(player, level, input, dt) {
     player.facingZ = dz;
   }
   player.landedPound = false;
+  player.doubled = false;
+  player.sprung = null;
 
   // Abilities (air only)
-  if (input.dash && !player.grounded && player.canDash && !player.pound) {
+  if (input.dash && !player.grounded && player.canDash && !player.pound && allows(level, 'dash')) {
     player.canDash = false;
     player.dash = ABILITIES.dashTime;
     player.dashX = length ? dx : player.facingX;
@@ -94,13 +109,22 @@ export function stepPlayer(player, level, input, dt) {
   if (input.jump && player.grounded) {
     player.vy = PLAYER.jumpSpeed;
     player.grounded = false;
+  } else if (input.jump && !player.grounded && player.canDouble && !player.pound && player.dash <= 0 && allows(level, 'double')) {
+    player.vy = ABILITIES.doubleSpeed;        // the double jump
+    player.canDouble = false;
+    player.doubled = true;
   }
   const previousY = player.y;
+  player.gliding = false;
   if (player.dash > 0) {
     player.dash -= dt; // gravity paused while dashing
     if (player.dash < 1e-9) player.dash = 0;
   } else {
     player.vy -= GRAVITY * dt;
+    if (input.glide && player.vy < -ABILITIES.glideFall && !player.pound && allows(level, 'glide')) {
+      player.vy = -ABILITIES.glideFall;       // gliding: sink slowly
+      player.gliding = true;
+    }
     player.y += player.vy * dt;
   }
   player.grounded = false;
@@ -113,7 +137,15 @@ export function stepPlayer(player, level, input, dt) {
       player.vy = 0;
       player.grounded = true;
       player.canDash = true;
+      player.canDouble = true;
       if (player.pound) { player.pound = false; player.landedPound = true; }
+      if (platform.spring) {                   // a bounce pad: up you go
+        player.vy = ABILITIES.springSpeed;
+        player.grounded = false;
+        player.sprung = platform;
+        player.gliding = false;
+        break;
+      }
     } else if (player.vy > 0 && previousY + PLAYER.height <= bottom &&
                player.y + PLAYER.height >= bottom) {
       player.y = bottom - PLAYER.height;

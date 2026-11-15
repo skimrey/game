@@ -51,7 +51,9 @@
 .slider span { float: right; font-variant-numeric: tabular-nums; }
 .slider input { width: 100%; }
 .check { display: block; margin: 2px 0; cursor: pointer; }
-.swatches { display: flex; gap: 6px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatches button.portrait { padding: 0; height: auto; overflow: hidden; }
+.swatches button.portrait canvas { display: block; width: 40px; height: 47px; }
 .swatches button {
   height: 34px;
   padding: 0;

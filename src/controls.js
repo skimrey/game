@@ -6,9 +6,10 @@
  *   Air dash      Shift or J / gamepad X (□)      — in the air, once per jump
  *   Ground pound  Q or K / gamepad B (○)          — in the air
  *
- * read() returns { left, right, forward, back, jump, dash, pound }; jump/dash/pound
+ * read() returns { left, right, forward, back, jump, dash, pound, glide }; jump/dash/pound
  * are true once per press (consumed on read), so a press is never lost or repeated
- * when a frame runs several physics steps.
+ * when a frame runs several physics steps; glide is true while jump is held (gliding:
+ * hold jump while falling — in the regions that allow it).
  */
 export const BINDINGS = {
   forward: ['KeyW', 'ArrowUp'],
@@ -23,12 +24,24 @@ const GAMEPAD = { jump: 0, pound: 1, dash: 2 };
 const ACTIONS = ['jump', 'dash', 'pound'];
 export const GAME_KEYS = Object.values(BINDINGS).flat();
 
-export function createControls(target = window) {
+/** Is the event target somewhere the player types or operates a control (inputs, selects…)? */
+export function isTypingTarget(target) {
+  const tag = target?.tagName;
+  return !!target && (target.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT');
+}
+
+/**
+ * @param target  element/window to listen on
+ * @param ignore  (keyboard event) => true to leave the key alone (menus, text fields);
+ *                by default keys typed into inputs are ignored
+ */
+export function createControls(target = window, { ignore = event => isTypingTarget(event.target) } = {}) {
   const held = new Set();
   const pressed = new Set();
   const padWas = {};
 
   const onDown = event => {
+    if (ignore(event)) return;
     if (GAME_KEYS.includes(event.code)) event.preventDefault();
     if (!held.has(event.code)) {
       for (const action of ACTIONS) if (BINDINGS[action].includes(event.code)) pressed.add(action);
@@ -51,6 +64,7 @@ export function createControls(target = window) {
         left: any(BINDINGS.left), right: any(BINDINGS.right),
         forward: any(BINDINGS.forward), back: any(BINDINGS.back),
         jump: pressed.has('jump'), dash: pressed.has('dash'), pound: pressed.has('pound'),
+        glide: any(BINDINGS.jump),
       };
       pressed.clear();
       const pad = navigator.getGamepads?.()?.[0];
@@ -60,6 +74,7 @@ export function createControls(target = window) {
         out.right ||= pad.axes[0] > dz;
         out.forward ||= pad.axes[1] < -dz;
         out.back ||= pad.axes[1] > dz;
+        out.glide ||= !!pad.buttons[GAMEPAD.jump]?.pressed;
         for (const action of ACTIONS) {
           const down = !!pad.buttons[GAMEPAD[action]]?.pressed;
           if (down && !padWas[action]) out[action] = true;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createPlayer, stepPlayer } from '../src/physics.js';
 import { createLevel } from '../src/levelBuilder.js';
 import { levels, GENERATED_CAMPAIGN } from '../src/levels.js';
-import { auditLevel, analyzeJump, replaySolution, ticksToLand, ENVELOPE, RULES } from '../src/levelAudit.js';
+import { auditLevel, analyzeJump, replaySolution, ticksToLand, dashReach, ENVELOPE, RULES } from '../src/levelAudit.js';
 import { generateLevel, difficultyKnobs, acceptGenerated } from '../src/levelGenerator.js';
 
 const codes = audit => [...audit.errors, ...audit.warnings].map(e => e.code);
@@ -63,11 +63,21 @@ test('original level 5 ("Climb") is reported as uncompletable, with the reason',
 test('too-wide gap is unreachable; near-limit gaps are unfair, hard or need precision', () => {
   const budget = rise => ticksToLand(rise) * ENVELOPE.stepDistance; // max centre travel
   const gapFor = (difficulty, rise = 0) => difficulty * budget(rise) + 0.8; // + 2 × half-width
-  assert.ok(codes(auditLevel(gapLevel(gapFor(1.2)))).includes('UNREACHABLE_GOAL'));
+  const dashGapFor = difficulty => difficulty * dashReach(0) + 0.8;     // same, with the air dash
+  assert.ok(codes(auditLevel(gapLevel(dashGapFor(1.1)))).includes('UNREACHABLE_GOAL'));
 
-  const extreme = auditLevel(gapLevel(gapFor(0.95)));
+  const extreme = auditLevel(gapLevel(dashGapFor(0.95)));
   assert.equal(extreme.ok, false);
   assert.ok(['UNFAIR_JUMP', 'BOT_FAILED'].includes(extreme.errors[0].code), codes(extreme).join());
+
+  // beyond a plain jump but comfortable with the air dash: the level requires the dash
+  const dashed = auditLevel(gapLevel(gapFor(1.2)));
+  assert.deepEqual(codes(dashed), []);
+  assert.deepEqual(dashed.route.map(e => e.kind), ['dash']);
+  assert.equal(dashed.metrics.moves.dash, 1);
+  assert.ok(dashed.metrics.dashWindow >= RULES.MIN_DASH_WINDOW, `window ${dashed.metrics.dashWindow}`);
+  // a plain jump at 95% of its limit is unfair — the planner takes the (easier) dash instead
+  assert.deepEqual(auditLevel(gapLevel(gapFor(0.95))).route.map(e => e.kind), ['dash']);
 
   const hard = auditLevel(gapLevel(gapFor(0.85)));
   assert.equal(hard.ok, true);
@@ -129,7 +139,7 @@ test('quality warnings are raised', () => {
 
   const skip = createLevel('skip').setSpawn(0, 0.5, 0)
     .addPlatform(0, 0, 0, 4, 1, 4)
-    .addPlatform(-8, 0, 0, 2, 1, 2).addPlatform(-8, 0, 4, 2, 1, 2).addPlatform(-8, 0, 8, 2, 1, 2).addPlatform(-8, 0, 12, 2, 1, 2)
+    .addPlatform(-12, 0, 0, 2, 1, 2).addPlatform(-12, 0, 4, 2, 1, 2).addPlatform(-12, 0, 8, 2, 1, 2).addPlatform(-12, 0, 12, 2, 1, 2)
     .addPlatform(0, 0, 5, 4, 1, 4)
     .setGoal(0, 0.5, 5, 1).build();
   assert.ok(codes(auditLevel(skip)).includes('UNREACHABLE_PLATFORMS')); // off-route but reachable platforms are classified by the fun audit
@@ -162,11 +172,11 @@ test('campaign names are unique and difficulty never drops sharply', () => {
 // ---------------------------------------------------------------------------
 test('campaign specs (startAttempt + trusted) produce exactly the levels a full, validated generation would', () => {
   GENERATED_CAMPAIGN.forEach((spec, i) => {
-    const full = generateLevel({ seed: spec.seed, difficulty: spec.difficulty });
+    const full = generateLevel({ seed: spec.seed, difficulty: spec.difficulty, theme: spec.theme });
     assert.equal(full.attempts, spec.startAttempt ?? 1, `seed ${spec.seed}`);
     const campaignLevel = levels.find(l => l.meta?.generated && l.meta.seed === spec.seed && l.meta.difficulty === spec.difficulty);
     const { tier, ...fullLevel } = full.level;
-    const { tier: _, ...shipped } = campaignLevel;
+    const { tier: _, hint: __, ...shipped } = campaignLevel;
     assert.equal(JSON.stringify(shipped), JSON.stringify(fullLevel), `campaign level ${i}`);
   });
 });
@@ -180,10 +190,11 @@ test('generator is deterministic per seed and varies across seeds', () => {
 });
 
 test('generated levels pass an independent audit with zero warnings (sample)', () => {
+  // (a small sample keeps the suite quick; `npm run levels:report` checks hundreds)
   const ratings = {};
   for (const difficulty of [0, 0.5, 1]) {
     ratings[difficulty] = [];
-    for (let seed = 1; seed <= 25; seed++) {
+    for (let seed = 1; seed <= 10; seed++) {
       const { level, audit } = generateLevel({ seed, difficulty });
       const copy = JSON.parse(JSON.stringify(level));
       const again = auditLevel(copy);

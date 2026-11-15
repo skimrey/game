@@ -14,14 +14,56 @@
     const params = new URLSearchParams(location.search);
     const scale = Number(params.get('resolution') || 0.35);
     const canvas = document.getElementById('c');
+    if (params.get('pixelated') === '1') canvas.style.imageRendering = 'pixelated';   // nearest-neighbour upscaling
     const gl = canvas.getContext('webgl', { antialias: false });
     const meter = createFpsMeter({ showFps: false }, { canvas });
+    // ?upscale=1: render at `scale` into a texture, then upscale it (bilinear) onto a full-size
+    // canvas inside WebGL, which the page composites 1:1 with nearest-neighbour sampling
+    const upscale = params.get('upscale') === '1';
+    let fbo = null, tex = null, prog = null;
+    if (upscale) {
+      canvas.style.imageRendering = 'pixelated';
+      tex = gl.createTexture();
+      fbo = gl.createFramebuffer();
+      const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
+      prog = gl.createProgram();
+      gl.attachShader(prog, sh(gl.VERTEX_SHADER, 'attribute vec2 c; varying vec2 uv; void main() { uv = c * 0.5 + 0.5; gl_Position = vec4(c, 0.0, 1.0); }'));
+      gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, 'precision mediump float; uniform sampler2D t; varying vec2 uv; void main() { gl_FragColor = texture2D(t, uv); }'));
+      gl.bindAttribLocation(prog, 0, 'c');
+      gl.linkProgram(prog);
+      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    }
+    let size = '';
     function frame(t) {
-      canvas.width = Math.floor(canvas.clientWidth * scale);
-      canvas.height = Math.floor(canvas.clientHeight * scale);
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      const w = Math.floor(canvas.clientWidth * scale), h = Math.floor(canvas.clientHeight * scale);
+      if (upscale) {
+        canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight;
+        if (size !== `${w}x${h}`) {
+          size = `${w}x${h}`;
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      } else {
+        canvas.width = w; canvas.height = h;
+      }
+      gl.viewport(0, 0, w, h);
       gl.clearColor((t / 3000) % 1, 0.4, 0.6, 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
+      if (upscale) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.useProgram(prog);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
       meter.frame(t);
       requestAnimationFrame(frame);
     }

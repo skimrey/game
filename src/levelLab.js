@@ -147,7 +147,8 @@ function renderReport(generation) {
     ['Jumps', m.jumps],
     ['Hardest jump', `${(m.maxDifficulty * 100).toFixed(0)}% of limit`],
     ['Avg jump', `${(m.avgDifficulty * 100).toFixed(0)}%`],
-    ['Max rise', m.maxRise.toFixed(2)],
+    ['Max rise / drop', `${m.maxRise.toFixed(2)} / ${m.maxDrop.toFixed(2)}`],
+    ['Moves', `${m.moves.jump} jumps · ${m.moves.dash} air-dash jump${m.moves.dash === 1 ? '' : 's'}${m.dashWindow ? ` (timing window ${(m.dashWindow * 1000).toFixed(0)} ms)` : ''} · ${m.moves.longDrop} long drop${m.moves.longDrop === 1 ? '' : 's'}`],
     ['Bot par time', `${m.parTime.toFixed(1)} s`],
     ['Platforms', m.platforms],
   ] : [['Platforms', level.platforms.length]];
@@ -164,9 +165,13 @@ function renderReport(generation) {
     rows.push(['Up+down / fwd', `${f.verticalRatio.toFixed(2)} ${mark(f.verticalRatio, req.verticalRatio)} (≥ ${req.verticalRatio.toFixed(2)})`]);
     rows.push(['Turns', `${f.turns} ${mark(f.turns, req.turns)} (≥ ${req.turns})`]);
     rows.push(['Min placement diff', `${f.minPlacementDifference.toFixed(2)}`]);
+    rows.push(['Air-dash gaps', `${f.dashes} ${mark(f.dashes, req.dashes)} (needs ${req.dashes})`]);
+    rows.push(['Long drops', `${f.longDrops} ${mark(f.longDrops, req.longDrops)} (needs ${req.longDrops})`]);
+    rows.push(['Shortcuts', `${f.shortcuts} ${mark(f.shortcuts, req.shortcuts)} (needs ${req.shortcuts})${f.shortcutDetails.filter(c => c.verified).map(c => ` · ${c.path.join('→')} skips ${c.skipped}, needs ${c.needs.join('+')}`).join('')}`]);
     const em = encounterAudit?.metrics;
     if (em) rows.push(['Encounters', `${em.encounters} ${mark(em.encounters, req.encounters)} (needs ${req.encounters}) · ${em.enemies} enemies · combat bot: ${em.hits} hit${em.hits === 1 ? '' : 's'}, ${em.defeated} defeated`]);
   }
+  if (level.meta?.theme) rows.push(['Theme', level.meta.theme]);
   if (generation) rows.push(['Generator tries', `${generation.attempts}${generation.rejections.length ? ` (rejected: ${generation.rejections.join(', ')})` : ''}`]);
   $('metrics').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
 
@@ -183,7 +188,7 @@ function renderReport(generation) {
     : '<li>No issues: completable, forgiving, fun requirements met, scenery safe.</li>';
   $('segments').textContent = level.meta?.segments ? `Segments: ${level.meta.segments.join(' → ')}` : 'Hand-made level';
   $('route').innerHTML = (audit.route || []).map(e =>
-    `<li>${e.from} → ${e.to} · ${e.kind}${e.kind === 'jump' ? ` ${(e.difficulty * 100).toFixed(0)}% · rise ${e.dh.toFixed(2)}` : ''}</li>`).join('');
+    `<li>${e.from} → ${e.to} · ${e.kind === 'dash' ? 'air-dash jump' : e.kind}${e.kind !== 'walk' ? ` ${(e.difficulty * 100).toFixed(0)}% · ${e.dh >= 0 ? 'rise' : 'drop'} ${Math.abs(e.dh).toFixed(2)}` : ''}</li>`).join('');
 }
 
 // ---------------------------------------------------------------------------
@@ -232,11 +237,12 @@ function buildLabels() {
   labels.innerHTML = '';
   const onRoute = new Set((audit.route || []).flatMap(e => [e.from, e.to]));
   const falsePath = new Set((funAudit?.metrics?.branches || []).filter(b => b.kind === 'false').flatMap(b => b.platforms));
+  const shortcut = new Set((funAudit?.metrics?.shortcutDetails || []).filter(c => c.verified).flatMap(c => c.platforms));
   labelEls = level.platforms.map((p, i) => {
     const el = document.createElement('span');
-    el.textContent = falsePath.has(i) ? `${i} ✕` : i;
+    el.textContent = falsePath.has(i) ? `${i} ✕` : shortcut.has(i) ? `${i} ★` : i;
     const isGoal = Math.abs(topOf(p) - level.goal.y) < 1e-3 && Math.abs(level.goal.x - p.x) <= p.width / 2 && Math.abs(level.goal.z - p.z) <= p.depth / 2;
-    el.className = isGoal ? 'goal' : onRoute.has(i) ? 'route' : falsePath.has(i) ? 'false-path' : '';
+    el.className = isGoal ? 'goal' : onRoute.has(i) ? 'route' : falsePath.has(i) ? 'false-path' : shortcut.has(i) ? 'shortcut' : '';
     labels.append(el);
     return el;
   });

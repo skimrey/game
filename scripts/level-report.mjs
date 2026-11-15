@@ -15,7 +15,8 @@ import { levels, TIERS, tierOf, tierForDifficulty } from '../src/levels.js';
 import { BIOMES, BIOME_LIST } from '../src/biomes.js';
 import { buildScenery, auditScenery } from '../src/scenery.js';
 import { auditBiome, auditTierBackgrounds } from '../src/visualAudit.js';
-import { auditFun, designDifficulty } from '../src/funAudit.js';
+import { auditFun, designDifficulty, funRequirements } from '../src/funAudit.js';
+import { auditCampaign, describeLevel } from '../src/campaignAudit.js';
 import { auditEncounters } from '../src/encounterAudit.js';
 import { auditLevel, formatAudit, replaySolution, ENVELOPE } from '../src/levelAudit.js';
 import { generateLevel, acceptGenerated, generatedRejections } from '../src/levelGenerator.js';
@@ -69,7 +70,8 @@ for (const [i, level] of levels.entries()) {
   const fun = auditFun(level, audit, designDifficulty(level));
   if (fun.metrics) {
     const f = fun.metrics;
-    console.log(`  fun ${f.funScore.toFixed(1)}/10 @ d ${f.difficulty.toFixed(2)}: ${f.falsePaths} false paths · ${f.directions.length} directions · sideways ${f.lateralRatio.toFixed(2)} · up/down ${f.verticalRatio.toFixed(2)} · ${f.turns} turns · min placement diff ${f.minPlacementDifference.toFixed(2)}`);
+    console.log(`  fun ${f.funScore.toFixed(1)}/10 @ d ${f.difficulty.toFixed(2)}${level.meta?.theme ? ` (${level.meta.theme})` : ''}: ${f.falsePaths} false paths · ${f.directions.length} directions · sideways ${f.lateralRatio.toFixed(2)} · up/down ${f.verticalRatio.toFixed(2)} · ${f.turns} turns · min placement diff ${f.minPlacementDifference.toFixed(2)}`);
+    console.log(`  moves: ${f.dashes} air-dash jump(s)${audit.metrics.dashWindow ? ` (window ${(audit.metrics.dashWindow * 1000).toFixed(0)} ms)` : ''} · ${f.longDrops} long drop(s) (max ${f.maxDrop.toFixed(1)}) · ${f.shortcuts} shortcut(s)${f.shortcutDetails.filter(c => c.verified).map(c => ` [${c.path.join('→')} skips ${c.skipped}, needs ${c.needs.join('+')}]`).join('')}`);
   }
   for (const issue of fun.issues) violation(`campaign level "${level.name}" fun: ${issue.message}`);
   const enc = auditEncounters(level, audit);
@@ -87,6 +89,16 @@ for (const [i, level] of levels.entries()) {
   previous = audit.metrics?.rating ?? previous;
 }
 
+// --- Campaign as a whole ---------------------------------------------------
+{
+  const campaign = auditCampaign(levels, TIERS, levels.map(l => describeLevel(l)));
+  const closest = campaign.distances.slice().sort((a, b) => a.distance - b.distance).slice(0, 4);
+  console.log(`\n== Campaign audit: ${campaign.ok ? 'PASS' : 'FAIL'} ==`);
+  console.log(`challenge: ${campaign.levels.map(d => d.challenge.toFixed(1)).join(' → ')}`);
+  console.log(`closest pairs: ${closest.map(p => `${p.a} / ${p.b} ${p.distance.toFixed(2)}${p.sameTier ? ' (same tier)' : ''}`).join(', ')}`);
+  for (const i of campaign.issues) violation(`campaign: ${i.message}`);
+}
+
 // --- Generator at scale ---------------------------------------------------
 console.log(`\n== Generator: ${SEEDS} seeds × ${DIFFICULTIES.length} difficulties ==`);
 const rejectionCounts = {};
@@ -94,7 +106,7 @@ const patternCounts = {};
 const rows = [];
 const started = Date.now();
 for (const difficulty of DIFFICULTIES) {
-  const stats = { difficulty, n: 0, firstTry: 0, attempts: 0, ratings: [], jumps: [], hardest: [], par: [], ms: 0, sceneryChecked: 0, sceneryOk: 0, falsePaths: [], encounters: [], combatHits: [], directions: [], lateral: [], vertical: [], turns: [], fun: [] };
+  const stats = { difficulty, n: 0, firstTry: 0, attempts: 0, ratings: [], jumps: [], hardest: [], par: [], ms: 0, sceneryChecked: 0, sceneryOk: 0, falsePaths: [], encounters: [], combatHits: [], directions: [], lateral: [], vertical: [], turns: [], fun: [], dashes: [], drops: [], shortcuts: [] };
   for (let seed = 1; seed <= SEEDS; seed++) {
     const t0 = Date.now();
     let result;
@@ -141,6 +153,9 @@ for (const difficulty of DIFFICULTIES) {
     stats.vertical.push(fun.verticalRatio);
     stats.turns.push(fun.turns);
     stats.fun.push(fun.funScore);
+    stats.dashes.push(fun.dashes);
+    stats.drops.push(fun.longDrops);
+    stats.shortcuts.push(fun.shortcuts);
 
     stats.ratings.push(audit.metrics.rating);
     stats.jumps.push(audit.metrics.jumps);
@@ -168,7 +183,7 @@ for (const s of rows) {
   ].join(' | '));
 }
 
-console.log('\ndifficulty | false paths [min–max] | encounters | bot hits | directions | sideways/fwd | up+down/fwd | turns | fun score');
+console.log('\ndifficulty | false paths [min–max] | encounters | bot hits | directions | sideways/fwd | up+down/fwd | turns | dashes | drops | shortcuts | fun score');
 for (const s of rows) {
   console.log([
     fmt(s.difficulty, 2).padStart(10),
@@ -179,6 +194,9 @@ for (const s of rows) {
     fmt(mean(s.lateral), 2).padStart(12),
     fmt(mean(s.vertical), 2).padStart(11),
     fmt(mean(s.turns)).padStart(5),
+    fmt(mean(s.dashes)).padStart(6),
+    fmt(mean(s.drops)).padStart(5),
+    fmt(mean(s.shortcuts)).padStart(9),
     fmt(mean(s.fun)).padStart(9),
   ].join(' | '));
 }
@@ -188,8 +206,10 @@ for (let i = 1; i < rows.length; i++) {
   if (mean(rows[i].ratings) <= mean(rows[i - 1].ratings)) {
     violation(`calibration: mean rating at ${rows[i].difficulty} is not above ${rows[i - 1].difficulty}`);
   }
-  // stepped requirements must rise strictly; continuous measures within 5% (sampling noise)
-  for (const [key, tolerance] of [['falsePaths', 1], ['encounters', 1], ['vertical', 0.95], ['turns', 0.95]]) {
+  // stepped requirements must rise strictly while the requirement rises (never fall once capped);
+  // continuous measures within 5% (sampling noise)
+  const rises = key => funRequirements(rows[i].difficulty)[key] > funRequirements(rows[i - 1].difficulty)[key];
+  for (const [key, tolerance] of [['falsePaths', rises('falsePaths') ? 1 : 0.9], ['encounters', 1], ['vertical', 0.95], ['turns', 0.95]]) {
     if (mean(rows[i][key]) <= mean(rows[i - 1][key]) * tolerance) violation(`calibration: mean ${key} at ${rows[i].difficulty} is not above ${rows[i - 1].difficulty}`);
   }
 }

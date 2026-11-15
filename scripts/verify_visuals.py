@@ -103,7 +103,7 @@ def main():
         # 3. tiers in the real game
         samples = {}
         for tier, level in TIER_FIRST_LEVEL.items():
-            page.goto(f"{base}/index.html?level={level}")
+            page.goto(f"{base}/index.html?level={level}&menu=0")   # skip the character screen
             time.sleep(4.5)  # let the tier banner fade out
             path = os.path.join(args.out, f"tier-{level:02d}-{tier}.png")
             page.screenshot(path=path)

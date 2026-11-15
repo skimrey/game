@@ -6,12 +6,13 @@
  *   PLATFORM_VS_HORIZON   platforms stand out from the fog/horizon they fade into
  *   PLATFORM_VS_BELOW     platforms stand out from what is seen below them
  *   AVATAR_VS_PLATFORM    the player stands out from the platform surface
- *   GOAL_VS_PLATFORM      the goal beacon stands out from the platform surface
+ *   GOAL_VS_PLATFORM      the goal gem stands out from the platform surface
  *   TIER_BACKGROUND       each tier's background differs clearly from every other tier
  */
 import { BIOMES } from './biomes.js';
 import { MATERIALS } from './materials.js';
 import { AVATAR_PALETTES } from './avatar.js';
+import { GEM_COLOR } from './gem.js';
 
 export const VISUAL_RULES = {
   PLATFORM_VS_HORIZON: 25,
@@ -65,7 +66,7 @@ export function auditBiome(biome) {
     avatarVsPlatform: check('AVATAR_VS_PLATFORM',
       Math.min(...Object.values(AVATAR_PALETTES).map(p => Math.max(deltaE(mul(p.shirt, biome.light.tint), top), deltaE(mul(p.pack, biome.light.tint), top)))),
       VISUAL_RULES.AVATAR_VS_PLATFORM, 'avatar (least distinct outfit) vs platform'),
-    goalVsPlatform: check('GOAL_VS_PLATFORM', deltaE([1, 0.83, 0.15], top), VISUAL_RULES.GOAL_VS_PLATFORM, 'goal beacon vs platform'),
+    goalVsPlatform: check('GOAL_VS_PLATFORM', deltaE(GEM_COLOR, top), VISUAL_RULES.GOAL_VS_PLATFORM, 'goal gem vs platform'),
   };
   return { biome: biome.id, ok: issues.length === 0, issues, metrics };
 }

@@ -17,6 +17,8 @@ import { createSession } from './session.js';
 import { enemyParts } from './enemies.js';
 import { emitGameplayEffects } from './effects.js';
 import { createHealthHud } from './hud.js';
+import { createCharacterStore } from './character.js';
+import { paintPortrait } from './characterScreen.js';
 
 // ---------------------------------------------------------------------------
 // Arena
@@ -274,15 +276,31 @@ for (const b of Object.values(BIOMES)) {
 }
 biomeSelect.addEventListener('change', () => { biome = BIOMES[biomeSelect.value]; biomeSelect.blur(); });
 
+// Outfits: the game's heroes and the player's own designs (character screen), then the legacy palettes
 const paletteContainer = $('palettes');
-for (const [name, pal] of Object.entries(AVATAR_PALETTES)) {
+const characters = createCharacterStore();
+const outfits = [
+  ...characters.all().map(design => ({ title: design.name, apply: () => avatar.setCharacter(design), design })),
+  ...(characters.draft() ? [{ title: `${characters.draft().name} (unsaved)`, apply: () => avatar.setCharacter(characters.draft()), design: characters.draft() }] : []),
+  ...Object.entries(AVATAR_PALETTES).map(([name, pal]) => ({ title: `${name} palette`, apply: () => avatar.setPalette(name), pal })),
+];
+const selectedId = characters.selected().id;
+for (const outfit of outfits) {
   const button = document.createElement('button');
-  button.title = name;
-  const css = c => `rgb(${c.map(v => Math.round(v * 255)).join(',')})`;
-  button.innerHTML = [pal.cap, pal.shirt, pal.pants].map(c => `<span style="background:${css(c)}"></span>`).join('');
-  if (name === 'classic') button.classList.add('active');
+  button.title = outfit.title;
+  if (outfit.design) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 48; canvas.height = 56;
+    paintPortrait(canvas, outfit.design, { framing: 'bust', background: [[0.2, 0.27, 0.38], [0.3, 0.38, 0.5]] });
+    button.classList.add('portrait');
+    button.append(canvas);
+  } else {
+    const css = c => `rgb(${c.map(v => Math.round(v * 255)).join(',')})`;
+    button.innerHTML = [outfit.pal.cap, outfit.pal.shirt, outfit.pal.pants].map(c => `<span style="background:${css(c)}"></span>`).join('');
+  }
+  if (outfit.design?.id === selectedId) { button.classList.add('active'); outfit.apply(); }
   button.addEventListener('click', () => {
-    avatar.setPalette(name);
+    outfit.apply();
     paletteContainer.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === button));
     button.blur();
   });
@@ -338,7 +356,7 @@ function updateHud(dt) {
   ui.fps.textContent = meter ? meter.fps : fps;
   status.textContent = paused
     ? 'Paused — press N to step, P to resume.'
-    : `Explore: stairs & ledge (left), wall (right), hurdle, head-bonk block, pit & gold flag ahead.${timeScale !== 1 ? ` Slow-mo ${timeScale.toFixed(2)}×` : ''}`;
+    : `Explore: stairs & ledge (left), wall (right), hurdle, head-bonk block, pit & the gem ahead.${timeScale !== 1 ? ` Slow-mo ${timeScale.toFixed(2)}×` : ''}`;
 }
 
 function frame(time) {
@@ -368,7 +386,7 @@ try {
   meter = createFpsMeter(quality, { canvas, renderer: render });
   requestAnimationFrame(frame);
   if (benchSeconds) {
-    meter.startBench(benchSeconds).then(r => {
+    meter.startBench(benchSeconds, Number(new URLSearchParams(location.search).get('warmup')) || undefined).then(r => {
       status.textContent = `Bench: ${r.fps.toFixed(1)} fps avg · ${r.lowFps.toFixed(1)} fps low · ${r.canvas?.join('×')}`;
     });
   }
@@ -379,6 +397,7 @@ try {
 
 // Exposed for debugging from the console.
 window.playground = {
+  get render() { return render; },
   avatar, level, keys, setPreview, setCamera, session,
   get player() { return player; },
   orbit: () => orbit,

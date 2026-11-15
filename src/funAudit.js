@@ -19,15 +19,24 @@
  *                          first two route platforms and at least one plain jump between them
  *   FALSE_PATH_UNVERIFIED  the bot could not actually enter a false path, or climb back
  *                          out of one of its platforms, in the real physics
+ *   TOO_FEW_DASHES         the route must require the air dash (gaps a plain jump can't make)
+ *   TOO_FEW_DROPS          the route must include long drops (≥ RULES.LONG_DROP down)
+ *   TOO_FEW_SHORTCUTS      non-obvious alternate routes that skip part of the course
+ *   SHORTCUT_UNVERIFIED    the bot could not actually take a shortcut in the real physics
+ *
+ * Moves are rated with the best fair move: a plain jump, or — where that is beyond
+ * RULES.QUALITY_CAP — an air-dash jump (see levelAudit.moveBetween).
  *
  * False paths are detected from the level geometry, independently of how the
  * level was made: off-route platforms are grouped into branches, and each branch
  * is classified from where you can enter it and where it lets you out:
- *   false      never leads further along the route than where you entered it
+ *   false      never leads further along the route than where you'd jump into it (a dash
+ *              in from the route platform before only leads back to that spot: no progress)
  *   detour     rejoins the very next route platform (no progress, no dead end)
- *   alternate  skips at least one route platform
+ *   alternate  skips at least one route platform — a shortcut, once proven in the physics
  */
-import { analyzeJump, topOf, RULES, simulateMove } from './levelAudit.js';
+import { analyzeJump, moveBetween, topOf, RULES, simulateMove, bestSpecial } from './levelAudit.js';
+import { abilitiesOf } from './physics.js';
 import { encounterPositions, encounterRequirement } from './encounterAudit.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -39,15 +48,21 @@ export const FUN_RULES = {
 };
 
 /** What a level of design difficulty `d` must deliver. */
-export function funRequirements(d) {
+export function funRequirements(d, abilities = ['dash']) {
   d = clamp(d, 0, 1);
   return {
-    falsePaths: Math.floor(d * 5 + 0.25),           // 0 at the start … 5 at the hardest
+    // 0 at the start … 4 from d 0.75: with the air dash, every dead end must sit well below a
+    // climbing route (see levelGenerator growFalsePath), so more would crowd out everything else;
+    // with the double jump they must sit more than a double jump below — two is plenty then
+    falsePaths: Math.min(abilities.includes('double') ? 2 : 4, Math.floor(d * 5 + 0.25)),
     directions: d < 0.2 ? 3 : d < 0.5 ? 4 : 5,
     lateralRatio: lerp(0.15, 0.5, d),
     verticalRatio: lerp(0.08, 0.3, d),
     turns: Math.round(lerp(1, 6, d)),
     encounters: encounterRequirement(d),
+    dashes: d >= 0.6 ? 2 : d >= 0.15 ? 1 : 0,      // gaps only the air dash crosses
+    longDrops: d >= 0.2 ? 1 : 0,                  // falls of RULES.LONG_DROP or more
+    shortcuts: d >= 0.15 ? 1 : 0,                 // non-obvious alternate routes (from the dash lesson on)
   };
 }
 
@@ -66,6 +81,30 @@ function directionsOf({ dx, dy, dz }) {
   if (dz >= t.forward) out.push('forward');
   if (dz <= -t.forward) out.push('back');
   return out;
+}
+
+/**
+ * How a route travels (centre to centre between consecutive route platforms): the
+ * directions it moves in, sideways / up-down / forward totals and direction changes.
+ * Shared with the level generator, which checks its designs before auditing them.
+ */
+export function routeTravel(platforms, route) {
+  const moves = [];
+  for (let i = 1; i < route.length; i++) {
+    const a = platforms[route[i - 1]], b = platforms[route[i]];
+    moves.push({ from: route[i - 1], to: route[i], dx: b.x - a.x, dy: topOf(b) - topOf(a), dz: b.z - a.z });
+  }
+  const directions = new Set(moves.flatMap(directionsOf));
+  const sum = f => moves.reduce((s, m) => s + f(m), 0);
+  const forward = Math.max(1, sum(m => Math.max(0, m.dz)));
+  const lateral = sum(m => Math.abs(m.dx));
+  const ascent = sum(m => Math.max(0, m.dy));
+  const descent = sum(m => Math.max(0, -m.dy));
+  const t = FUN_RULES.DIRECTION_THRESHOLD;
+  const signChanges = values => values.reduce((n, v, i) => n + (i > 0 && Math.sign(v) !== Math.sign(values[i - 1]) ? 1 : 0), 0);
+  const turns = signChanges(moves.filter(m => Math.abs(m.dx) >= t.lateral).map(m => m.dx)) +
+    signChanges(moves.filter(m => Math.abs(m.dy) >= t.vertical).map(m => m.dy));
+  return { moves, directions, forward, lateral, ascent, descent, turns, lateralRatio: lateral / forward, verticalRatio: (ascent + descent) / forward };
 }
 
 /** Easiest way (fewest fair moves) from `start` back onto any route platform, avoiding banned moves. */
@@ -87,6 +126,48 @@ function wayBack(start, allowed, routeIndex, edge, banned) {
   return null;
 }
 
+/**
+ * Prove an alternate branch is a real shortcut: the bot enters it from the route, crosses
+ * it and leaves it further along the route (skipping at least one route platform), every
+ * move in the real physics. Returns { platforms, verified, from, to, skipped, path, needs, problem }.
+ */
+function proveShortcut(level, branch, route, routeIndex, edge) {
+  const members = new Set(branch.platforms);
+  const result = { platforms: branch.platforms, verified: false, problem: 'no way through found' };
+  for (const exit of branch.fairExits) {
+    const exitIndex = routeIndex.get(exit);
+    // route platforms early enough that leaving at `exit` skips at least one route platform
+    const starts = branch.entries.filter(r => routeIndex.get(r) <= exitIndex - 2).sort((a, b) => routeIndex.get(a) - routeIndex.get(b));
+    for (const start of starts) {
+      // fewest fair moves start → (branch platforms only) → exit
+      const prev = new Map([[start, null]]);
+      const queue = [start];
+      while (queue.length && !prev.has(exit)) {
+        const a = queue.shift();
+        for (const b of [...members, exit]) {
+          if (prev.has(b) || edge[a][b] > RULES.QUALITY_CAP || (a === start && b === exit)) continue;
+          if (b === exit && a === start) continue;
+          prev.set(b, a);
+          queue.push(b);
+        }
+      }
+      if (!prev.has(exit)) continue;
+      const path = [];
+      for (let v = exit; v !== null; v = prev.get(v)) path.unshift(v);
+      const failed = path.slice(1).findIndex((b, k) => !simulateMove(level, path[k], b));
+      if (failed >= 0) { result.problem = `bot failed ${path[failed]} → ${path[failed + 1]}`; continue; }
+      const moves = path.slice(1).map((b, k) => moveBetween(level.platforms[path[k]], level.platforms[b], RULES.QUALITY_CAP, abilitiesOf(level)));
+      return {
+        platforms: branch.platforms, verified: true, from: start, to: exit, path,
+        skipped: exitIndex - routeIndex.get(start) - 1,
+        hopsSaved: exitIndex - routeIndex.get(start) - (path.length - 1),
+        needs: [...new Set(moves.map(m => (['dash', 'glide', 'double', 'spring'].includes(m.kind) ? m.kind : -m.dh >= RULES.LONG_DROP ? 'drop' : m.kind)))],
+      };
+    }
+  }
+  return result;
+}
+
 /** Group off-route platforms into branches and classify them. */
 export function findBranches(level, audit) {
   const { platforms } = level;
@@ -94,12 +175,17 @@ export function findBranches(level, audit) {
   const route = [audit.route[0]?.from ?? 0, ...audit.route.map(e => e.to)];
   const routeIndex = new Map(route.map((p, i) => [p, i]));
   const edge = Array.from({ length: n }, () => new Array(n).fill(Infinity));
+  const plainEdge = Array.from({ length: n }, () => new Array(n).fill(Infinity));
   const dashEdge = Array.from({ length: n }, () => new Array(n).fill(Infinity));
+  const abilities = abilitiesOf(level);
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
       if (i === j) continue;
-      edge[i][j] = analyzeJump(platforms[i], platforms[j]).difficulty;
-      dashEdge[i][j] = analyzeJump(platforms[i], platforms[j], { moves: 'dash' }).difficulty;
+      plainEdge[i][j] = analyzeJump(platforms[i], platforms[j]).difficulty;
+      // the special moves this level allows (air dash, glide, double jump)
+      dashEdge[i][j] = bestSpecial(platforms[i], platforms[j], abilities)?.difficulty ?? Infinity;
+      // best fair move: the plain jump if fair, else a special move if fair, else the plain jump
+      edge[i][j] = plainEdge[i][j] <= RULES.QUALITY_CAP || dashEdge[i][j] > RULES.QUALITY_CAP ? plainEdge[i][j] : dashEdge[i][j];
     }
   }
 
@@ -135,12 +221,17 @@ export function findBranches(level, audit) {
       }
     }
     const entries = route.filter(r => members.some(m => edge[r][m] <= RULES.QUALITY_CAP));
+    // where a player would naturally wander in: a plain (fair) jump
+    const plainEntries = route.filter(r => members.some(m => plainEdge[r][m] <= RULES.QUALITY_CAP));
     // A branch lets you progress if you can leave it further along the route than
     // the earliest place you could have entered it (then it's an alternate route).
     const entryIndex = Math.min(Infinity, ...entries.map(r => routeIndex.get(r)));
+    const plainEntryIndex = Math.min(Infinity, ...plainEntries.map(r => routeIndex.get(r)));
     // ways out count the air dash: a branch you can dash out of forward is no dead end
     const exits = route.filter(r => members.some(m => dashEdge[m][r] <= 1));
     const furthest = Math.max(-1, ...exits.map(r => routeIndex.get(r)));
+    // fair ways out (for proving shortcuts), furthest along the route first
+    const fairExits = route.filter(r => members.some(m => edge[m][r] <= RULES.QUALITY_CAP)).sort((a, b) => routeIndex.get(b) - routeIndex.get(a));
     const trapped = members.filter(m => !canFinish.has(m));
     // Ways in, easiest and smallest drop first (verified in the physics later)
     const entryEdges = entries.flatMap(r => members.map(m => [r, m]))
@@ -154,8 +245,12 @@ export function findBranches(level, audit) {
       entryIndex,
       // false: leads nowhere · detour: rejoins the very next route platform ·
       // alternate: skips at least one route platform
-      kind: entries.length === 0 ? 'hidden' : furthest > entryIndex + 1 ? 'alternate' : furthest > entryIndex ? 'detour' : 'false',
+      // false: from where you'd jump in, it leads nowhere further (a dash in from the route
+      // platform before only gets you back to where you could have jumped in: no progress)
+      kind: entries.length === 0 ? 'hidden' : furthest > entryIndex + 1 ? 'alternate'
+        : furthest <= Math.max(entryIndex, plainEntryIndex) ? 'false' : 'detour',
       trapped,
+      fairExits,
     });
   }
   return { branches, route, routeIndex, edge };
@@ -167,31 +262,14 @@ export function findBranches(level, audit) {
  */
 export function auditFun(level, audit, difficulty = designDifficulty(level)) {
   const issues = [];
-  const req = funRequirements(difficulty);
+  const req = funRequirements(difficulty, abilitiesOf(level));
   if (!audit.ok || !audit.route) {
     return { ok: false, issues: [{ code: 'NOT_PLAYABLE', message: 'Level must pass the playability audit first' }], metrics: null, requirements: req };
   }
   const { platforms } = level;
   const { branches, route, routeIndex, edge } = findBranches(level, audit);
 
-  // Moves between consecutive route platforms (centre to centre)
-  const moves = [];
-  for (let i = 1; i < route.length; i++) {
-    const a = platforms[route[i - 1]], b = platforms[route[i]];
-    moves.push({ from: route[i - 1], to: route[i], dx: b.x - a.x, dy: topOf(b) - topOf(a), dz: b.z - a.z });
-  }
-
-  // Directions & travel
-  const directions = new Set(moves.flatMap(directionsOf));
-  const sum = f => moves.reduce((s, m) => s + f(m), 0);
-  const forward = Math.max(1, sum(m => Math.max(0, m.dz)));
-  const lateral = sum(m => Math.abs(m.dx));
-  const ascent = sum(m => Math.max(0, m.dy));
-  const descent = sum(m => Math.max(0, -m.dy));
-  const t = FUN_RULES.DIRECTION_THRESHOLD;
-  const signChanges = values => values.reduce((n, v, i) => n + (i > 0 && Math.sign(v) !== Math.sign(values[i - 1]) ? 1 : 0), 0);
-  const turns = signChanges(moves.filter(m => Math.abs(m.dx) >= t.lateral).map(m => m.dx)) +
-    signChanges(moves.filter(m => Math.abs(m.dy) >= t.vertical).map(m => m.dy));
+  const { moves, directions, forward, lateral, ascent, descent, turns } = routeTravel(platforms, route);
 
   // Minimum difference between consecutive placements
   const similar = [];
@@ -205,6 +283,7 @@ export function auditFun(level, audit, difficulty = designDifficulty(level)) {
 
   const falsePaths = branches.filter(b => b.kind === 'false');
   const alternates = branches.filter(b => b.kind === 'alternate');
+  const shortcuts = alternates.map(b => proveShortcut(level, b, route, routeIndex, edge));
   const detours = branches.filter(b => b.kind === 'detour');
   const traps = branches.filter(b => b.kind !== 'hidden' && b.trapped.length);
 
@@ -223,6 +302,12 @@ export function auditFun(level, audit, difficulty = designDifficulty(level)) {
     alternates: alternates.length,
     detours: detours.length,
     branches,
+    // moves only the level's special techniques make: air dash, glide, double jump, bounce pads
+    dashes: (audit.metrics.moves?.dash ?? 0) + (audit.metrics.moves?.glide ?? 0) + (audit.metrics.moves?.double ?? 0) + (audit.metrics.moves?.spring ?? 0),
+    longDrops: audit.metrics.moves?.longDrop ?? 0,
+    maxDrop: audit.metrics.maxDrop ?? 0,
+    shortcuts: shortcuts.filter(c => c.verified).length,
+    shortcutDetails: shortcuts,
   };
 
   const requireAtLeast = (code, value, min, what, fmt = v => String(v)) => {
@@ -236,6 +321,12 @@ export function auditFun(level, audit, difficulty = designDifficulty(level)) {
   requireAtLeast('TOO_LITTLE_VERTICAL', metrics.verticalRatio, req.verticalRatio, 'up/down travel per forward unit', v => v.toFixed(2));
   requireAtLeast('TOO_FEW_TURNS', turns, req.turns, 'direction changes along the route');
   requireAtLeast('TOO_FEW_FALSE_PATHS', falsePaths.length, req.falsePaths, 'false paths');
+  requireAtLeast('TOO_FEW_DASHES', metrics.dashes, req.dashes, 'route moves that need a special technique (air dash, glide, double jump, bounce pad)');
+  requireAtLeast('TOO_FEW_DROPS', metrics.longDrops, req.longDrops, `long drops (≥ ${RULES.LONG_DROP}) on the route`);
+  requireAtLeast('TOO_FEW_SHORTCUTS', metrics.shortcuts, req.shortcuts, 'proven shortcuts');
+  for (const c of shortcuts.filter(c => !c.verified)) {
+    issues.push({ code: 'SHORTCUT_UNVERIFIED', message: `Alternate route through ${c.platforms.join(',')}: ${c.problem}` });
+  }
   // Prove false paths in the real physics: at least one way in must work, and from
   // every platform at least one way back to the route must work.
   let simulated = 0;
@@ -290,6 +381,8 @@ export function auditFun(level, audit, difficulty = designDifficulty(level)) {
     Math.min(1, metrics.verticalRatio / 0.4),
     Math.min(1, turns / 8),
     Math.min(1, metrics.minPlacementDifference / 1.5),
+    ((metrics.dashes > 0) + (metrics.longDrops > 0)) / 2,   // movement vocabulary
+    Math.min(1, metrics.shortcuts),
   ];
   metrics.funScore = (10 * parts.reduce((s, v) => s + v, 0)) / parts.length;
 

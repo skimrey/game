@@ -41,3 +41,4 @@ Thumbs.db
 *.generated.js
 coverage/
 screenshots/
+__pycache__/

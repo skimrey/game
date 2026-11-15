@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "node scripts/dev-server.mjs --open index.html",
     "dev:test": "node scripts/dev-server.mjs --open playground.html --quality test",
+    "play:test": "node scripts/dev-server.mjs --open index.html --quality test",
     "test": "node --test",
     "levels:report": "node scripts/level-report.mjs",
     "levels:pick": "node scripts/pick-campaign.mjs",
+    "levels:signatures": "node scripts/campaign-signatures.mjs",
+    "balance": "node scripts/balance-report.mjs --seeds 6",
     "visuals:verify": "python3 scripts/verify_visuals.py",
     "bench": "python3 scripts/bench_quality.py"
   },

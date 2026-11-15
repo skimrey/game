@@ -9,15 +9,20 @@
  *
  * Pipeline
  *   measure jump envelope from physics  →  build jump graph (analytic)
- *   →  plan easiest route (minimax difficulty, then fewest hops)
+ *   →  plan easiest route (minimax difficulty, then fewest hops); if no fair route
+ *      exists with plain jumps, allow the special moves the level allows — air dash,
+ *      glide, double jump (level.abilities) — as few as possible, then the easiest
+ *      (a level may *require* them); bounce pads (spring platforms) launch you high
  *   →  bot executes route in the real physics, replanning around failed edges
+ *      (dash jumps: the bot finds the dash timing on copies of the deterministic
+ *      physics, which also measures how long the timing window is for a human)
  *   →  quality rules over geometry + verified route
  *
  * The result includes the bot's recorded inputs, so a solution can be replayed
  * deterministically (the Level Lab uses this to "watch the bot solve it").
  */
 
-import { createPlayer, stepPlayer, PLAYER } from './physics.js';
+import { createPlayer, stepPlayer, PLAYER, ABILITIES, abilitiesOf } from './physics.js';
 import { Config } from './config.js';
 
 export const DT = 1 / 120;
@@ -36,6 +41,8 @@ export const RULES = {
   BACKWARD_JUMP: -1.0,        // warn if a jump moves this far toward the camera (-z)
   KILL_PLANE_MARGIN: 2,       // platforms must sit this far above the fall threshold
   MIN_JUMPS: 1,
+  MIN_DASH_WINDOW: 0.1,       // warn if a required air dash must be timed within less than this (s)
+  LONG_DROP: 2.5,             // a route move falling at least this far counts as a long drop
 };
 
 // ---------------------------------------------------------------------------
@@ -107,6 +114,70 @@ export function dashReach(dh) {
   return v < 0 ? null : v;
 }
 
+/**
+ * Reach of the other special moves, measured from the physics the same way:
+ *   glide   jump, then hold jump all the way down (sinking slowly)
+ *   double  jump, then jump again at the best moment
+ *   spring  launched by a bounce pad (no jump input)
+ */
+const specialTables = {};
+const ALL = { abilities: ['dash', 'glide', 'double'] };
+function buildTrajectoryTable(runs) {
+  const empty = { platforms: [], spawn: { x: 0, y: 100, z: 0 }, goal: { x: 1e9, y: -1e9, z: 1e9, radius: 0 }, ...ALL };
+  const size = Math.ceil((8 - DASH_GRID.min) / DASH_GRID.step) + 1;
+  const best = new Float64Array(size).fill(-1);
+  let peak = 0;
+  for (const run of runs) {
+    const p = createPlayer({ x: 0, y: 50, z: 0 });
+    p.grounded = true;
+    const heights = [0], dist = [0], vys = [0];
+    run.start?.(p);
+    for (let n = 1; p.y - 50 > DASH_GRID.min - 1 && n < 4000; n++) {
+      stepPlayer(p, empty, { forward: true, ...run.input(n) }, DT);
+      heights.push(p.y - 50); dist.push(p.z); vys.push(p.vy);
+      peak = Math.max(peak, p.y - 50);
+    }
+    for (let n = 1; n < heights.length; n++) {
+      if (vys[n] > 0 || heights[n] >= heights[n - 1]) continue;
+      const hi = Math.floor((heights[n - 1] - DASH_GRID.min) / DASH_GRID.step);
+      const lo = Math.ceil((heights[n] - DASH_GRID.min) / DASH_GRID.step);
+      for (let g = Math.max(0, lo); g <= Math.min(size - 1, hi); g++) best[g] = Math.max(best[g], dist[n]);
+    }
+  }
+  return { best, peak };
+}
+function specialTable(kind) {
+  if (specialTables[kind]) return specialTables[kind];
+  let runs;
+  if (kind === 'glide') runs = [{ input: n => ({ jump: n === 1, glide: true }) }];
+  else if (kind === 'double') {
+    runs = [];
+    for (let k = 2; k <= ticksToLand(-3); k++) runs.push({ input: n => ({ jump: n === 1 || n === k }) });
+  } else if (kind === 'spring') runs = [{ start: p => { p.vy = ABILITIES.springSpeed; p.grounded = false; }, input: () => ({}) }];
+  else throw new Error(`unknown move ${kind}`);
+  return (specialTables[kind] = buildTrajectoryTable(runs));
+}
+
+/** The highest a move can take you above take-off. */
+export function movePeak(kind) {
+  if (kind === 'double' || kind === 'spring') return specialTable(kind).peak;
+  return ENVELOPE.peak;
+}
+
+/** Max centre travel landing `dh` above take-off for a move kind (null if out of reach). */
+export function moveReach(kind, dh) {
+  if (kind === 'dash') return dashReach(dh);
+  if (kind === 'jump' || kind === 'basic') { const t = ticksToLand(dh); return t === null ? null : t * ENVELOPE.stepDistance; }
+  const { best, peak } = specialTable(kind);
+  if (dh > peak) return null;
+  const g = Math.max(0, Math.floor((dh - DASH_GRID.min) / DASH_GRID.step));
+  const v = best[Math.min(g, best.length - 1)];
+  return v < 0 ? null : v;
+}
+
+/** Special moves (beyond a plain jump) a level allows. */
+export const SPECIAL_MOVES = ['dash', 'glide', 'double'];
+
 /** Ticks from take-off until the player lands on a surface `dh` above take-off (null if unreachable). */
 const landingCache = new Map();
 export function ticksToLand(dh) {
@@ -170,24 +241,54 @@ export function analyzeJump(a, b, { moves = 'basic' } = {}) {
   const dh = topOf(b) - topOf(a);
   const ra = rawRect(a), rb = rawRect(b);
   const rawGap = Math.hypot(axisGap(ra.x0, ra.x1, rb.x0, rb.x1), axisGap(ra.z0, ra.z1, rb.z0, rb.z1));
-  if (Math.abs(dh) < 1e-6 && rawGap < 2 * PLAYER.halfWidth - 0.1) {
+  if (Math.abs(dh) < 1e-6 && rawGap < 2 * PLAYER.halfWidth - 0.1 && !a.spring && !b.spring) {
     return { kind: 'walk', dh: 0, distance: 0, difficulty: 0, severity: 0, reason: null };
   }
   const sa = standRegion(a, PLAYER.halfWidth), sb = standRegion(b, PLAYER.halfWidth);
   const gx = axisGap(sa.x0, sa.x1, sb.x0, sb.x1), gz = axisGap(sa.z0, sa.z1, sb.z0, sb.z1);
   const distance = octagonDistance(gx, gz);
-  const ticks = moves === 'dash' ? (dashReach(dh) === null ? null : 1) : ticksToLand(dh);
-  if (ticks === null) {
-    return { kind: 'jump', dh, distance, difficulty: Infinity, severity: 1 + (dh - ENVELOPE.peak) + distance / 10,
-      reason: `rise of ${dh.toFixed(2)} exceeds max jump height ${ENVELOPE.peak.toFixed(2)}` };
+  // off a bounce pad you don't jump — you're launched
+  const kind = a.spring ? 'spring' : moves === 'basic' ? 'jump' : moves;
+  const peak = movePeak(kind);
+  const reach = moveReach(kind, dh);
+  if (reach === null) {
+    return { kind, dh, distance, difficulty: Infinity, severity: 1 + (dh - peak) + distance / 10,
+      reason: `rise of ${dh.toFixed(2)} exceeds max ${kind === 'jump' ? 'jump' : kind} height ${peak.toFixed(2)}` };
   }
-  const budget = Math.max(0.01, moves === 'dash' ? dashReach(dh) : ticks * ENVELOPE.stepDistance);
-  const difficulty = Math.max(distance / budget, dh > 0 ? dh / ENVELOPE.peak : 0);
+  const budget = Math.max(0.01, reach);
+  // a bounce pad does the climbing for you: only steering across counts in full
+  const difficulty = Math.max(distance / budget, dh > 0 ? (dh / peak) * (kind === 'spring' ? 0.7 : 1) : 0);
   const reason = difficulty > 1
     ? (distance > budget ? `gap of ${distance.toFixed(2)} exceeds reach of ${budget.toFixed(2)} at rise ${dh.toFixed(2)}`
-      : `rise of ${dh.toFixed(2)} exceeds max jump height ${ENVELOPE.peak.toFixed(2)}`)
+      : `rise of ${dh.toFixed(2)} exceeds max jump height ${peak.toFixed(2)}`)
     : null;
-  return { kind: 'jump', dh, distance, difficulty, severity: difficulty, reason };
+  return { kind, dh, distance, difficulty, severity: difficulty, reason };
+}
+
+/**
+ * The special move (of those allowed) for a to b: { kind, difficulty, … } or null.
+ * Each move has its speciality, so levels teach them apart: the first fair one in the
+ * order dash (distance) → glide (long descents) → double jump (height); if none is
+ * fair, the least unfair (so an impossible gap reports why).
+ */
+export function bestSpecial(a, b, abilities = ['dash'], cap = RULES.QUALITY_CAP) {
+  if (a.spring) return null;
+  const options = SPECIAL_MOVES.filter(k => abilities.includes(k)).map(kind => analyzeJump(a, b, { moves: kind }));
+  if (!options.length) return null;
+  return options.find(m => m.difficulty <= Math.min(cap, RULES.HARD_JUMP)) || options.find(m => m.difficulty <= cap)
+    || options.reduce((x, y) => (y.difficulty < x.difficulty ? y : x));
+}
+
+/**
+ * The easiest fair way from platform a to b: a plain walk / jump if that is within
+ * `cap` of the physical limit, otherwise an air-dash jump if *that* is (kind 'dash',
+ * difficulty measured against the dash's reach), otherwise the plain jump (with its reason).
+ */
+export function moveBetween(a, b, cap = RULES.QUALITY_CAP, abilities = ['dash']) {
+  const basic = analyzeJump(a, b);
+  if (basic.difficulty <= cap) return basic;
+  const special = bestSpecial(a, b, abilities, cap);
+  return special && special.difficulty <= cap ? special : basic;
 }
 
 /** Does the player's box at `pos` (feet) intersect platform p's volume? */
@@ -217,7 +318,7 @@ function supportIndex(player, platforms) {
 // ---------------------------------------------------------------------------
 // Input encoding (for recording / replaying solutions)
 // ---------------------------------------------------------------------------
-const BIT = { left: 1, right: 2, forward: 4, back: 8, jump: 16, dash: 32, pound: 64 };
+const BIT = { left: 1, right: 2, forward: 4, back: 8, jump: 16, dash: 32, pound: 64, glide: 128 };
 export function encodeInput(input) {
   let n = 0;
   for (const key in BIT) if (input[key]) n |= BIT[key];
@@ -282,17 +383,69 @@ export class Bot {
     return 'failed';
   }
 
-  jumpTo(target, maxTicks = 600) {
-    let input = { ...steer(target.x - this.player.x, target.z - this.player.z), jump: true };
+  /** Landed (or, on a bounce pad, bounced) — where? */
+  landedOn(p) {
+    return p.sprung || (p.grounded ? this.level.platforms.find(q => standingOn(p, q)) || null : null);
+  }
+
+  /** Jump (or, off a bounce pad, just steer) toward target until landing anywhere. `glide`: hold jump on the way down. */
+  jumpTo(target, maxTicks = 600, { glide = false, launched = false } = {}) {
+    let input = { ...steer(target.x - this.player.x, target.z - this.player.z), jump: !launched, glide };
     for (let i = 0; i < maxTicks; i++) {
       if (this.step(input) === 'respawn') return false;
-      if (this.player.grounded) return true;
+      if (this.player.grounded || this.player.sprung) return true;
+      input = { ...steer(target.x - this.player.x, target.z - this.player.z), glide };
+    }
+    return false;
+  }
+
+  /**
+   * Jump toward `target` and use a timed action (an air dash, or the double jump) at the
+   * best moment to land on platform `to`. Every possible tick is tried on a copy of the
+   * player (the physics is deterministic); the bot acts in the middle of the ticks that
+   * work. The width of that window is how forgiving the timing is (recorded in windows).
+   */
+  timedJumpTo(target, to, action, maxTicks = 600) {
+    const press = action === 'double' ? { jump: true } : { dash: true };
+    const tryAt = k => {
+      const p = { ...this.player };
+      let input = { ...steer(target.x - p.x, target.z - p.z), jump: true };
+      for (let t = 0; t < maxTicks; t++) {
+        if (t === k) input = { ...input, ...press };
+        if (stepPlayer(p, this.level, input, DT) === 'respawn') return false;
+        if (t > 0 && (p.grounded || p.sprung)) return this.landedOn(p) === to;
+        input = steer(target.x - p.x, target.z - p.z);
+      }
+      return false;
+    };
+    const airTicks = ticksToLand(Math.max(-30, topOf(to) - this.player.y)) ?? ticksToLand(0);
+    const works = [];
+    for (let k = 1; k <= airTicks + 40; k++) if (tryAt(k)) works.push(k);
+    if (!works.length) return false;
+    // the longest run of consecutive working ticks is the timing window
+    let best = [works[0], works[0]], run = [works[0], works[0]];
+    for (let i = 1; i < works.length; i++) {
+      run = works[i] === run[1] + 1 ? [run[0], works[i]] : [works[i], works[i]];
+      if (run[1] - run[0] > best[1] - best[0]) best = run;
+    }
+    const windows = action === 'double' ? (this.doubleWindows ||= []) : (this.dashWindows ||= []);
+    windows.push((best[1] - best[0] + 1) * DT);
+    const k = Math.round((best[0] + best[1]) / 2);
+    let input = { ...steer(target.x - this.player.x, target.z - this.player.z), jump: true };
+    for (let t = 0; t < maxTicks; t++) {
+      if (t === k) input = { ...input, ...press };
+      if (this.step(input) === 'respawn') return false;
+      if (t > 0 && (this.player.grounded || this.player.sprung)) return true;
       input = steer(target.x - this.player.x, target.z - this.player.z);
     }
     return false;
   }
 
-  /** Execute one edge. Returns true if the bot ends up standing on `to`. */
+  dashJumpTo(target, to, maxTicks = 600) {
+    return this.timedJumpTo(target, to, 'dash', maxTicks);
+  }
+
+  /** Execute one edge ('walk' | 'jump' | 'dash' | 'glide' | 'double' | 'spring'). True if the bot ends up on `to`. */
   traverse(from, to, kind) {
     const { from: takeoff, to: near } = closestPoints(standRegion(from, this.takeoffEdge), standRegion(to, this.landingEdge));
     let landing = near;
@@ -308,15 +461,24 @@ export class Bot {
       };
       landing = closestPoints({ x0: takeoff.x, x1: takeoff.x, z0: takeoff.z, z1: takeoff.z }, core).to;
     }
-    if (kind === 'walk') {
+    if (kind === 'spring' || from.spring) {
+      // already bouncing on the pad: steer toward the target (another bounce if the first falls short)
+      for (let bounce = 0; bounce < 4; bounce++) {
+        if (!this.jumpTo(landing, 600, { launched: true })) return this.reachedGoal;
+        if (this.reachedGoal || this.landedOn(this.player) === to) break;
+        if (this.player.sprung !== from) return this.reachedGoal;
+      }
+    } else if (kind === 'walk') {
       if (this.walkTo(landing) !== 'arrived') return this.reachedGoal;
     } else {
       // 'blocked' is fine: e.g. a taller neighbour is in the way — jump from here.
       if (this.walkTo(takeoff) === 'failed') return this.reachedGoal;
       if (this.reachedGoal) return true;
-      if (!this.jumpTo(landing)) return false;
+      const ok = kind === 'dash' || kind === 'double' ? this.timedJumpTo(landing, to, kind)
+        : this.jumpTo(landing, 600, { glide: kind === 'glide' });
+      if (!ok) return this.reachedGoal;
     }
-    return this.reachedGoal || standingOn(this.player, to);
+    return this.reachedGoal || this.landedOn(this.player) === to;
   }
 
   finish(goal, maxTicks = 1200) {
@@ -373,11 +535,74 @@ function planRoute(edges, start, goals, banned, cap = 1) {
   return best;
 }
 
-function reachableFrom(edges, start, cap = 1) {
+/**
+ * Special-move edges (air dash, glide, double jump — those the level allows) for pairs a
+ * plain jump can't fairly make; the easiest allowed move per pair (difficulty ≤ 1 = possible).
+ */
+function buildSpecialGraph(platforms, edges, abilities = ['dash']) {
+  return platforms.map((a, i) => edges[i]
+    .filter(e => e.difficulty > RULES.QUALITY_CAP)
+    .map(e => { const m = bestSpecial(a, platforms[e.to], abilities); return m && { ...m, from: i, to: e.to }; })
+    .filter(e => e && e.difficulty <= 1));
+}
+
+const isSpecial = e => SPECIAL_MOVES.includes(e.kind);
+const edgeKey = e => `${isSpecial(e) ? e.kind[0] + e.kind[1] : ''}${e.from}>${e.to}`;
+
+/** Fewest-cost path (dash edges cost 1000 hops) using plain edges ≤ tb and dash edges ≤ td. */
+function cheapestPath(edges, dashEdges, start, goals, tb, td, banned) {
+  const cost = new Map([[start, 0]]), prev = new Map([[start, null]]);
+  const open = [start], done = new Set();
+  while (open.length) {
+    open.sort((a, b) => cost.get(a) - cost.get(b));
+    const node = open.shift();
+    if (done.has(node)) continue;
+    done.add(node);
+    if (goals.has(node)) {
+      const path = [];
+      for (let e = prev.get(node); e; e = prev.get(e.from)) path.unshift(e);
+      return path;
+    }
+    for (const e of [...edges[node].filter(x => x.difficulty <= tb), ...dashEdges[node].filter(x => x.difficulty <= td)]) {
+      if (banned.has(edgeKey(e))) continue;
+      const c = cost.get(node) + (isSpecial(e) ? 1000 : 1);
+      if (c < (cost.get(e.to) ?? Infinity)) { cost.set(e.to, c); prev.set(e.to, e); open.push(e.to); }
+    }
+  }
+  return null;
+}
+
+/**
+ * Easiest route when plain jumps can't make it fairly: as few air dashes as possible,
+ * then the easiest plain jumps, then the easiest dashes, then the fewest hops.
+ */
+function planDashRoute(edges, dashEdges, start, goals, banned, cap = RULES.QUALITY_CAP) {
+  const dashes = path => path.filter(isSpecial).length;
+  const full = cheapestPath(edges, dashEdges, start, goals, cap, cap, banned);
+  if (!full) return null;
+  const need = dashes(full);
+  const lowest = (values, ok) => {
+    let lo = 0, hi = values.length - 1, best = cap;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (ok(values[mid])) { best = values[mid]; hi = mid - 1; } else lo = mid + 1;
+    }
+    return best;
+  };
+  const levelsOf = list => [...new Set(list.flat().map(e => e.difficulty).filter(d => d <= cap))].sort((a, b) => a - b);
+  const fits = (tb, td) => { const p = cheapestPath(edges, dashEdges, start, goals, tb, td, banned); return p && dashes(p) === need; };
+  const tb = lowest(levelsOf(edges), v => fits(v, cap));
+  const td = lowest(levelsOf(dashEdges), v => fits(tb, v));
+  return cheapestPath(edges, dashEdges, start, goals, tb, td, banned);
+}
+
+/** Platforms reachable from `start` with plain jumps (≤ cap) and, if given, fair air-dash jumps. */
+function reachableFrom(edges, start, cap = 1, dashEdges = null) {
   const seen = new Set([start]);
   const queue = [start];
   while (queue.length) {
-    for (const e of edges[queue.shift()]) {
+    const node = queue.shift();
+    for (const e of [...edges[node], ...(dashEdges ? dashEdges[node] : [])]) {
       if (e.difficulty <= cap && !seen.has(e.to)) { seen.add(e.to); queue.push(e.to); }
     }
   }
@@ -455,18 +680,25 @@ export function auditLevel(level) {
   if (goalPlatforms.has(start)) error('GOAL_ON_SPAWN', 'Goal is on the spawn platform');
 
   // --- Completability ---------------------------------------------------
+  const abilities = abilitiesOf(level);
   const edges = buildGraph(platforms);
+  const dashEdges = buildSpecialGraph(platforms, edges, abilities);
   const banned = new Set();
   let verified = null, failures = [];
   for (let attempt = 0; attempt < 25 && !verified; attempt++) {
-    const path = planRoute(edges, start, goalPlatforms, banned);
+    let path = planRoute(edges, start, goalPlatforms, banned);
+    // no fair route with plain jumps: does the air dash make one? (if even that is
+    // unfair, the route is still planned so the level fails as UNFAIR_JUMP, not unreachable)
+    if (!path || path.some(e => e.difficulty > RULES.QUALITY_CAP)) {
+      path = planDashRoute(edges, dashEdges, start, goalPlatforms, banned) || path || planDashRoute(edges, dashEdges, start, goalPlatforms, banned, 1);
+    }
     if (!path) break;
     const run = new Bot(level);
     run.settle();
     let ok = true;
     for (const e of path) {
       if (!run.traverse(platforms[e.from], platforms[e.to], e.kind)) {
-        banned.add(`${e.from}>${e.to}`);
+        banned.add(edgeKey(e));
         failures.push(e);
         ok = false;
         break;
@@ -474,11 +706,11 @@ export function auditLevel(level) {
       if (run.reachedGoal) break;
     }
     if (ok && run.finish(goal)) verified = { path, bot: run };
-    else if (ok) { banned.add(`${path.at(-1).from}>${path.at(-1).to}`); failures.push(path.at(-1)); }
+    else if (ok) { banned.add(edgeKey(path.at(-1))); failures.push(path.at(-1)); }
   }
 
   if (!verified) {
-    const reach = reachableFrom(edges, start);
+    const reach = reachableFrom(edges, start, 1, dashEdges);
     const frontier = [...reach].flatMap(i => edges[i]).filter(e => !reach.has(e.to))
       .sort((a, b) => a.severity - b.severity)[0];
     if (failures.length && [...goalPlatforms].some(g => reach.has(g))) {
@@ -496,15 +728,20 @@ export function auditLevel(level) {
     from: e.from, to: e.to, kind: e.kind, dh: e.dh, distance: e.distance, difficulty: e.difficulty,
     dz: platforms[e.to].z - platforms[e.from].z,
   }));
-  const jumps = route.filter(e => e.kind === 'jump');
+  const jumps = route.filter(e => e.kind !== 'walk');
   const maxDifficulty = Math.max(0, ...jumps.map(e => e.difficulty));
   if (maxDifficulty > RULES.QUALITY_CAP) {
     error('UNFAIR_JUMP', `Easiest route still needs a jump at ${(maxDifficulty * 100).toFixed(0)}% of the physical limit (cap ${RULES.QUALITY_CAP * 100}%)`);
   }
   for (const e of jumps) {
-    if (e.difficulty > RULES.HARD_JUMP && e.difficulty <= RULES.QUALITY_CAP) warn('HARD_JUMP', `Jump ${e.from} → ${e.to} is at ${(e.difficulty * 100).toFixed(0)}% of the limit`);
-    if (e.dz < RULES.BACKWARD_JUMP) warn('BACKWARD_JUMP', `Jump ${e.from} → ${e.to} goes ${(-e.dz).toFixed(1)} toward the camera`);
+    const what = { dash: 'Dash jump', glide: 'Glide', double: 'Double jump', spring: 'Bounce' }[e.kind] || 'Jump';
+    if (e.difficulty > RULES.HARD_JUMP && e.difficulty <= RULES.QUALITY_CAP) warn('HARD_JUMP', `${what} ${e.from} → ${e.to} is at ${(e.difficulty * 100).toFixed(0)}% of the limit`);
+    if (e.dz < RULES.BACKWARD_JUMP) warn('BACKWARD_JUMP', `${what} ${e.from} → ${e.to} goes ${(-e.dz).toFixed(1)} toward the camera`);
   }
+  const dashWindow = Math.min(Infinity, ...(verified.bot.dashWindows || []));
+  if (dashWindow < RULES.MIN_DASH_WINDOW) warn('TIGHT_DASH', `An air dash on the route must be timed within ${(dashWindow * 1000).toFixed(0)} ms`);
+  const doubleWindow = Math.min(Infinity, ...(verified.bot.doubleWindows || []));
+  if (doubleWindow < RULES.MIN_DASH_WINDOW) warn('TIGHT_DOUBLE', `A double jump on the route must be timed within ${(doubleWindow * 1000).toFixed(0)} ms`);
   if (jumps.length < RULES.MIN_JUMPS) error('NO_CHALLENGE', 'Goal can be reached without jumping');
 
   // Forgiveness: replay the route as a sloppy player who takes off early.
@@ -518,7 +755,7 @@ export function auditLevel(level) {
     }
   }
   const visited = new Set([start, ...route.map(e => e.to)]);
-  const reach = reachableFrom(edges, start);
+  const reach = reachableFrom(edges, start, 1, dashEdges);
   if (reach.size < platforms.length) warn('UNREACHABLE_PLATFORMS', `${platforms.length - reach.size} platform(s) can never be reached`);
   // Off-route but reachable platforms are classified by the fun audit
   // (false paths vs alternate routes) — see funAudit.js.
@@ -535,6 +772,20 @@ export function auditLevel(level) {
     parTime: solution.ticks * DT,
     routeShare: visited.size / platforms.length,
     maxRise: Math.max(0, ...jumps.map(e => e.dh)),
+    maxDrop: Math.max(0, ...jumps.map(e => -e.dh)),
+    // movement vocabulary the route asks for
+    moves: {
+      walk: route.length - jumps.length,
+      jump: jumps.filter(e => e.kind === 'jump').length,
+      dash: jumps.filter(e => e.kind === 'dash').length,
+      glide: jumps.filter(e => e.kind === 'glide').length,
+      double: jumps.filter(e => e.kind === 'double').length,
+      spring: jumps.filter(e => e.kind === 'spring').length,
+      longDrop: jumps.filter(e => -e.dh >= RULES.LONG_DROP).length,
+    },
+    abilities,
+    dashWindow: Number.isFinite(dashWindow) ? dashWindow : null,
+    doubleWindow: Number.isFinite(doubleWindow) ? doubleWindow : null,
   };
   return result();
 }
@@ -550,7 +801,7 @@ export function simulateMove(level, fromIndex, toIndex) {
   const probe = { ...level, spawn: start, goal: { x: 1e9, y: -1e9, z: 1e9, radius: 0 } };
   const bot = new Bot(probe);
   if (!bot.settle() || !standingOn(bot.player, from)) return false;
-  return bot.traverse(from, to, analyzeJump(from, to).kind);
+  return bot.traverse(from, to, moveBetween(from, to, RULES.QUALITY_CAP, abilitiesOf(level)).kind);
 }
 
 /** Replay a recorded solution; returns true if it reaches the goal (determinism check). */

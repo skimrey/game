@@ -205,7 +205,7 @@ function underside(p, host, r, { rock, top, drip, dripGlow = 0 }) {
     const w = p.width * k * r.range(0.9, 1), d = p.depth * k * r.range(0.9, 1);
     const ox = (p.width - w) / 2 * r.range(-0.5, 0.5), oz = (p.depth - d) / 2 * r.range(-0.5, 0.5);
     const hh = h * Math.min(1.2, Math.sqrt(p.width * p.depth) / 3);
-    boxes.push(B('underside', [p.x + ox, y - hh / 2, p.z + oz], [w, hh, d], i === 0 ? top : shade(rock, 1 - i * 0.1), { host }));
+    boxes.push(B('underside', [p.x + ox, y - hh / 2, p.z + oz], [w, hh, d], i === 0 ? top : shade(rock, 1 - i * 0.1), { host, ...(i >= 2 ? { detail: true } : {}) }));
     y -= hh;
   });
   if (drip) {
@@ -213,7 +213,7 @@ function underside(p, host, r, { rock, top, drip, dripGlow = 0 }) {
     for (let i = 0; i < n; i++) {
       const len = r.range(0.25, 0.8);
       boxes.push(B('underside', [p.x + r.range(-0.35, 0.35) * p.width, p.y - p.height / 2 - len / 2 - 0.05, p.z + r.range(-0.35, 0.35) * p.depth],
-        [0.07, len, 0.07], drip, { host, glow: dripGlow }));
+        [0.07, len, 0.07], drip, { host, glow: dripGlow, detail: true }));
     }
   }
   return boxes;
@@ -464,6 +464,22 @@ const KITS = {
 // Build
 // ---------------------------------------------------------------------------
 /**
+ * Is platform i walled in on all four sides by platforms with the same top (a tile
+ * in the middle of a floor)? Nothing hanging below it could ever be seen.
+ */
+function enclosed(platforms, i) {
+  const p = platforms[i], top = topOf(p), out = 0.05;
+  const covered = (x, z) => platforms.some((q, j) => j !== i && Math.abs(topOf(q) - top) < 0.05 &&
+    Math.abs(x - q.x) <= q.width / 2 && Math.abs(z - q.z) <= q.depth / 2);
+  for (let k = 0; k <= 4; k++) {
+    const fx = p.x - p.width / 2 + (p.width * k) / 4, fz = p.z - p.depth / 2 + (p.depth * k) / 4;
+    if (!covered(fx, p.z - p.depth / 2 - out) || !covered(fx, p.z + p.depth / 2 + out) ||
+        !covered(p.x - p.width / 2 - out, fz) || !covered(p.x + p.width / 2 + out, fz)) return false;
+  }
+  return true;
+}
+
+/**
  * Build scenery for a level in a biome. Deterministic per (level name, biome).
  * Pass the level's audit so decoration can avoid the verified route.
  * @returns {{ boxes, ground, stats }}
@@ -477,6 +493,7 @@ export function buildScenery(level, biome, audit) {
   const stats = { placed: 0, rejected: 0, reasons: {} };
 
   /** Accept a decoration group only if every box passes every rule. */
+  let groups = 0;
   const place = (make, kind = 'backdrop', tries = 1) => {
     for (let t = 0; t < tries; t++) {
       const made = make();
@@ -485,11 +502,13 @@ export function buildScenery(level, biome, audit) {
         stats.reasons.BACKDROP_CLEAR_ZONE = (stats.reasons.BACKDROP_CLEAR_ZONE || 0) + 1;
         continue;
       }
-      const group = made.map(b => ({ ...b, kind: b.kind || kind }));
+      // every other decoration near the course is optional detail (dropped by lighter quality)
+      const group = made.map(b => ({ ...b, kind: b.kind || kind, ...(b.detail || ((b.kind || kind) === 'near' && groups % 2 === 1) ? { detail: true } : {}) }));
       const bad = group.flatMap(b => boxViolations(b, ctx));
       if (!bad.length) {
         boxes.push(...group);
         stats.placed++;
+        groups++;
         return true;
       }
       stats.rejected++;
@@ -507,8 +526,9 @@ export function buildScenery(level, biome, audit) {
   // 1. Undersides and surface details for every platform (skip pieces that break rules)
   level.platforms.forEach((p, i) => {
     const hanging = kit.underside(p, i, r);
-    // place layer by layer so a blocked lower layer doesn't remove the whole underside
-    for (const b of hanging) place(() => [b], 'underside');
+    // place layer by layer so a blocked lower layer doesn't remove the whole underside;
+    // a platform walled in by same-height neighbours (a tiled floor) hides its underside entirely
+    if (!enclosed(level.platforms, i)) for (const b of hanging) place(() => [b], 'underside');
     if (!p.material) for (const b of kit.surface(p, i, r)) place(() => [b], 'surface'); // details match the biome material only
   });
 

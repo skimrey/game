@@ -28,8 +28,12 @@ test('requirements grow with difficulty', () => {
     previous = req;
   }
   assert.equal(funRequirements(0).falsePaths, 0);
-  assert.ok(funRequirements(1).falsePaths >= 5);
+  assert.ok(funRequirements(1).falsePaths >= 4);
   assert.equal(funRequirements(1).directions, 5);
+  // the movement vocabulary: the dash from the dash lesson on, long drops, shortcuts
+  assert.deepEqual([funRequirements(0).dashes, funRequirements(0).longDrops, funRequirements(0).shortcuts], [0, 0, 0]);
+  assert.ok(funRequirements(0.15).dashes >= 1 && funRequirements(0.15).shortcuts >= 1);
+  assert.ok(funRequirements(0.2).longDrops >= 1 && funRequirements(1).dashes >= 2);
 });
 
 test('a varied course passes; travel, directions and turns are measured', () => {
@@ -62,20 +66,25 @@ test('a flat straight corridor lacks directions, travel and turns at higher diff
 });
 
 test('false paths are recognised and proven in the physics; alternates and traps are told apart', () => {
-  // A low ledge off platform 3: enterable, leads nowhere (not even with a dash), easy to climb back from.
-  const withFalsePath = course(b => b.addPlatform(6.5, -0.3, 13.5, 2, 1, 2));
+  // A low ledge right of platform 1: jump down into it from there, climb back out (a stiff 1.3);
+  // everything further on is more than a jump's height up (or out of reach) — even with a dash.
+  const withFalsePath = course(b => b.addPlatform(7.5, -0.7, 4.5, 2, 1, 2));
   const ok = fun(withFalsePath, 0.2);
   assert.equal(ok.metrics.falsePaths, 1, JSON.stringify(ok.metrics.branches));
   assert.ok(!codes(ok).includes('FALSE_PATH_UNVERIFIED'), JSON.stringify(ok.issues));
   assert.ok(ok.metrics.simulatedMoves >= 2);
 
-  // A side platform that leads on to a later route platform is an alternate, not a false path.
+  // A side platform that leads on to a later route platform is an alternate (a shortcut,
+  // proven in the physics), not a false path.
   const withAlternate = course(b => b.addPlatform(-2.5, 0.8, 11.5, 2, 1, 2));
   const alt = fun(withAlternate, 0.2);
   assert.equal(alt.metrics.falsePaths, 0);
   assert.equal(alt.metrics.alternates, 1);
+  assert.equal(alt.metrics.shortcuts, 1);
+  const shortcut = alt.metrics.shortcutDetails[0];
+  assert.ok(shortcut.verified && shortcut.skipped >= 1, JSON.stringify(shortcut));
 
-  // A ledge that just rejoins the next route platform is a detour, not a false path.
+  // A ledge that leads back onto the route (here, with the air dash, even further along) is no false path.
   const withDetour = course(b => b.addPlatform(-3.5, 0.9, 9.5, 2, 1, 2));
   const detour = fun(withDetour, 0.2);
   assert.equal(detour.metrics.falsePaths, 0, JSON.stringify(detour.metrics.branches));
@@ -115,5 +124,8 @@ test('generated levels meet the fun requirements and scale with difficulty (samp
     }
     means[d] = falsePaths.reduce((s, v) => s + v, 0) / falsePaths.length;
   }
-  assert.ok(means[0.2] < means[0.6] && means[0.6] < means[0.9], JSON.stringify(means));
+  // more false paths as difficulty rises — until the double jump arrives (0.65+), when dead ends
+  // must sit more than a double jump below the route and two are plenty (funRequirements)
+  assert.ok(means[0.2] < means[0.6], JSON.stringify(means));
+  assert.ok(means[0.9] >= funRequirements(0.9, ['dash', 'glide', 'double']).falsePaths, JSON.stringify(means));
 });

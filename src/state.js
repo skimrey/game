@@ -18,7 +18,8 @@ export class GameState {
       audioEnabled: true,
       controlScheme: 'wasd', // 'wasd', 'arrows', or 'gamepad'
     };
-    this.saveToLocalStorage();
+    // (No save here: saving the defaults before loadFromLocalStorage() ran used to
+    // wipe every player's best times and completed levels on each page load.)
   }
 
   updateLevelTime(levelName, time) {

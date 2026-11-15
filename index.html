@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <link rel="icon" href="data:,">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Platformer outline</title>
   <link rel="stylesheet" href="./style.css">
@@ -16,7 +17,8 @@
     <div class="hud">
       <h1>Platformer outline</h1>
       <p id="status" aria-live="polite">Loading…</p>
-      <p>WASD / arrows move · Space jump · Shift/J air dash · Q/K ground pound · R restart</p>
+      <p id="hint" class="level-hint" aria-live="polite" hidden></p>
+      <p id="controls-line">WASD / arrows move · Space jump · Shift/J air dash · Q/K ground pound · R restart · C change hero</p>
     </div>
   </main>
   <script type="module" src="./src/main.js"></script>

@@ -71,6 +71,7 @@ export function createSession(level, { maxHealth = RULES.maxHealth } = {}) {
       copy.time = this.time;
       copy.invulnerable = this.invulnerable;
       copy.checkpoint = { ...this.checkpoint };
+      copy.savePoint = this.savePoint && { ...this.savePoint };
       copy.deaths = this.deaths;
       copy.defeated = this.defeated;
       copy.hits = this.hits;
@@ -78,14 +79,25 @@ export function createSession(level, { maxHealth = RULES.maxHealth } = {}) {
       return copy;
     },
 
-    /** Restart the level: full health, enemies back, player at the spawn. */
+    /** A saved checkpoint (an arcade won mid-level): running out of hearts restarts here. */
+    savePoint: null,
+
+    /** Restart the level: full health, enemies back, player at the spawn (or the saved checkpoint). */
     reset() {
-      this.player = createPlayer(level.spawn);
+      const start = this.savePoint || level.spawn;
+      this.player = createPlayer(start);
       this.health = maxHealth;
       this.time = 0;
       this.invulnerable = 0;
-      this.checkpoint = { ...level.spawn };
+      this.checkpoint = { ...start };
       for (const e of enemies) { e.alive = true; e.defeatedAt = null; }
+    },
+
+    /** Save a checkpoint here and refill the hearts. */
+    save(point) {
+      this.savePoint = { ...point };
+      this.checkpoint = { ...point };
+      this.health = maxHealth;
     },
 
     defeat(enemy, how, events) {

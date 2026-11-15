@@ -18,6 +18,18 @@ export class LevelBuilder {
     return this;
   }
 
+  /** A bounce pad: landing on it launches you high (see physics.js). Small — you never stand on it. */
+  addSpring(x, y, z, width = 1.6, depth = 1.6) {
+    this.level.platforms.push({ x, y, z, width, height: 1, depth, spring: true });
+    return this;
+  }
+
+  /** Which special moves the level allows ('dash' | 'glide' | 'double'); see physics.js. */
+  setAbilities(abilities) {
+    this.level.abilities = [...abilities];
+    return this;
+  }
+
   setSpawn(x, y, z) {
     this.level.spawn = { x, y, z };
     return this;
@@ -26,6 +38,12 @@ export class LevelBuilder {
   /** Add an enemy (see enemies.js): { type, platform, axis, speed, phase } or { type: 'wisp', from, to, … }. */
   addEnemy(enemy) {
     (this.level.enemies ||= []).push(enemy);
+    return this;
+  }
+
+  /** A short tip shown when the level starts (teach a move the first time it matters). */
+  setHint(text) {
+    this.level.hint = text;
     return this;
   }
 

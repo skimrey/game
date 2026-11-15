@@ -49,6 +49,12 @@ This game is built using a modular, system-based architecture. Each system is se
 **Physics Behavior**:
 - Gravity: 20 m/s² downward
 - Jump: Instantaneous velocity boost to 8 m/s upward
+- Techniques (allowed per level by `level.abilities`, set per region from `TIER_ABILITIES` in
+  `levels.js`): air dash (`input.dash`), glide (`input.glide` = jump held while falling: the fall is
+  capped at `ABILITIES.glideFall`), double jump (jump again in the air, once per air time,
+  `doubleSpeed`); bounce pads are terrain (`platform.spring`, no ability needed): landing launches
+  the player at `springSpeed` and refreshes the dash and double jump. `player.sprung` /
+  `player.doubled` / `player.gliding` report them for effects
 - Movement: Normalized stick input applied to 5 m/s speed
 - Collision: AABB (axis-aligned bounding box) with platforms
 - Grounding: Detected when player is on top of platform and vy ≤ 0
@@ -64,31 +70,30 @@ This game is built using a modular, system-based architecture. Each system is se
 
 ### 2. Renderer (`src/renderer.js`)
 
-**Responsibility**: All visual output using WebGL
+**Responsibility**: All visual output using WebGL, at a cost the quality preset allows (`src/quality.js`)
 
-**Key Components**:
-- WebGL context setup and shader compilation
-- Vertex and fragment shaders (inline in source)
-- Camera system with `lookAt()` and `perspective()` matrices
-- Box geometry rendering
+**Geometry**: every box is 36 vertices in one interleaved format, so whole groups draw in one call
+(draw calls are expensive on software WebGL): platforms per material, scenery, one dynamic batch
+for the avatar / enemies / goal and one for transparent things (shadows, particles). Faces that
+can never be seen are never built (sides between touching tiles, bottoms of props resting on a
+surface, tops of rock slabs under a platform); scenery is baked into spatial chunks culled against
+the view frustum, and tiny surface details are skipped once they'd be under ~1.5 px.
 
-**Rendering Pipeline**:
-1. Clear depth and color buffers
-2. Compute view-projection matrix from camera position
-3. Draw each platform with green color
-4. Draw goal marker with gold color
-5. Draw player with red-brown color
-6. Draw particles with fading alpha
+**Two shading paths**:
+- `pixel` (normal): lighting, fog, height haze, edge highlights, ambient occlusion and wavy
+  grass/sand lips per pixel; procedural sky per pixel (`full` / `lite` / `flat`).
+- `vertex` (test preset, software rendering): lighting, AO and fog per vertex, the fragment shader
+  is one texture fetch and a multiply-add; tops and sides draw as separate ranges (one texture
+  each), lips are thin strips of geometry, the distant ground is a tessellated grid. The `baked`
+  sky renders the full sky once per biome into a panorama texture that a coarse screen grid samples.
 
-**Camera System**:
-- Follows player at offset: (x*0.5, y+7, z-12)
-- Looks at point: (x*0.5, y+1, z+5)
-- Provides smooth third-person view
+**Frame**: adaptive quality check → resize (pixelated: whole device pixels per canvas pixel) →
+opaque platforms, batch, scenery, ground (nearest first, for early depth rejection) → sky at the far
+plane (only uncovered pixels) → transparent batch.
 
-**Optimization**:
-- Single buffer object for all box geometry
-- Unified shader for all objects (color passed as uniform)
-- DPI scaling respects device pixel ratio
+**Camera System** (`src/camera.js`):
+- Follows player at offset: (x*0.5, y+7, z-12), looking at (x*0.5, y+1, z+5)
+- Menus and tools pass their own camera (orbit, overview, the character showroom)
 
 ### 3. Input System (`src/input.js`)
 
@@ -214,7 +219,94 @@ audioManager.play('jump', { volume: 0.7 });
 - Verifies goal is supported
 - Returns errors array
 
-### 8. Supporting Modules
+### 8. Characters (`src/character.js`, `src/avatar.js`, `src/characterScreen.js`, `src/portrait.js`)
+
+- `character.js` — design data (build, head, hair, hat, eyes, mouth, top, bottoms, shoes, back gear,
+  eight colours), the three default heroes, validation and saved designs (localStorage, with a
+  draft for unsaved work). DOM-free.
+- `avatar.js` — turns a design into posed, procedurally animated boxes (capes and ponytails trail,
+  jet flames burn in the air, wings flap), uniformly scaled to fit the physics hitbox.
+- `characterScreen.js` — the character select / editor overlay; the 3D preview is the game canvas
+  behind it (main.js's showroom). `portrait.js` paints 2D roster thumbnails from the same boxes.
+
+### 9. Level quality (`src/levelAudit.js`, `src/funAudit.js`, `src/encounterAudit.js`, `src/campaignAudit.js`)
+
+- Level audit: completability proven by a bot in the real physics (planning special moves where
+  plain jumps can't make it — the gentlest one the level allows: dash, then glide, then double jump,
+  plus bounce pads — and measuring their timing windows), fairness and quality rules.
+  `moveReach(kind, dh)` / `movePeak(kind)` give each move's envelope.
+- Fun audit: directions, travel, turns, false paths, proven shortcuts, required dashes and drops.
+- Encounter audit: enemy placement and a combat bot that must win losing at most one heart.
+- Campaign audit: distinct levels, a steady difficulty ramp, every move taught then used — including
+  one new technique per region (`TECHNIQUES`; a region's first level must teach its technique).
+  See `LEVEL_DESIGN.md`.
+
+### 9b. Runs, gems, retro boss battles and unlockables
+
+- **Runs** — `runLevels.js` plans a run's levels from the hand-written campaign: hand-made levels are
+  remixed (mirror, nudges, resizes, re-timed enemies), generated ones re-generated from their spec with
+  a run seed (then remixed if no fresh layout fits). `checkCandidate` accepts a level only if it passes
+  the level / fun / encounter audits, keeps every move of its base level, sits between its neighbours
+  on the challenge ramp (whether they end up remixed or not), keeps its par time and stays distinct from
+  every other level — so any mix of run and hand-written levels passes the campaign audit.
+  `runWorker.js` runs the planner off the main thread, one level ahead of the player; main.js swaps a
+  planned level in only before the player reaches it. `campaignSignatures.js` caches the campaign's
+  own signatures (regenerate with `npm run levels:signatures`; a test checks it).
+- **Goal gem** — `gem.js` builds the floating gem (colour cycles cyan → violet → magenta → gold, never
+  the green of the platforms) that the renderer draws at each level's goal.
+- **Bosses** — `bosses.js` makes each boss from the run seed and the level's place in the campaign: a
+  name and title in the region's flavour, a monster seed, colours, the mini-game (runner, or the
+  region's capstone on its last level: `battle/index.js CAPSTONES`) and its numbers (`bossStats`,
+  jittered per run). `checkBoss` plays it with the mode's bot: a perfect player must win within 65 %
+  of the clock losing at most one heart, and an idle one must lose — otherwise the numbers are re-rolled.
+- **Monsters** — `monsters.js` builds symmetric pixel-art creatures from parts (body superellipse,
+  eyes, brows, mouth, horns/antennae/ears/crest, legs/arms/tentacles/wings, pattern), shades and
+  outlines them; `checkMonster` rejects sprites in pieces, too sparse, too small, clipped or eyeless.
+- **Mini-games** — `battle/*.js` are pure and seeded (no DOM): `press(code)`, `release(code)` / `held`
+  (keys down, for steering), `step(dt)`, `drain()` events, `result`; some take `click(x, y)` /
+  `aimAt(x, y)`. Each exports a `bot({ lead })` used by the tests, the boss checks and the balance
+  report. 22 games with roles (`rolesOf`): boss games, checkpoint games (`checkpoint: true`, the "boss
+  health" is the goal still to reach), games that can be either (`roles: ['checkpoint', 'boss']` —
+  whack, fishing, maze; `bossStats(mode, d, …, kind)` gives each role its own numbers) and travel games
+  (`travel: true`; the health is the distance left). `TRAVEL_ROUTES` lists the vehicles that fit each
+  crossing between regions.
+- **Encounters** — `encounters.js` plans a run's 21 encounters (12 bosses, 6 checkpoints, 3 journeys)
+  from the 22 games with no repeats: capstones first, then a backtracking search (fewest candidates
+  first, single-role games before dual ones, never the same game twice in a row) under the terrain
+  rules (sled → alpine, lander → starlit, a route's vehicles, the plane at most once). Each
+  encounter's `difficulty` comes from its place in the whole sequence (0.08 → 0.95, capstones +0.06),
+  so a game met late is hard from the start. `encounterList` flattens a plan in play order;
+  `rating.js` turns the run's results into ★–★★★★★.
+- **Balance** — `battle/humanize.js` wraps a bot in a human-like player (`SKILLS` expert / average /
+  novice: reaction delay ± jitter, in-order delivery, press-rate limit, slips, aim error); bots take
+  `lead` (= the reaction delay) to anticipate and remember what they've pressed. `BALANCE_RULES` +
+  `playHuman` are checked in `test/balance.test.js`; `scripts/balance-report.mjs` prints the table.
+- **Travel** — `main.js` runs a region's journey after its last level (`runTravel`, once per
+  crossing); results of every encounter go to `runResults`, and `finishRun` shows the star panel.
+- **Arcade checkpoints** — `arcade.js` places a (non-solid) cabinet on the middle-most roomy route
+  platform (from the level audit's verified route); `main.js` starts the checkpoint game when the hero
+  walks into it and, on a win, `session.save(spot)` sets the restart point and refills the hearts.
+- **Test menu** — `testMenu.js` (test preset or `?dev=1`): any level, any mini-game × role × easy /
+  medium / hard (`TEST_DIFFICULTY`), skip to the gem / the arcade, new run.
+- **Retro rendering** — `pixel.js` draws palette indices into a 320×180 byte buffer (shapes, sprites
+  with flips / rotation / scaling, a 3×5 font) and converts it to RGBA once per frame; the canvas is
+  scaled up with crisp pixels. `palette.js` lays out 256 colours in ramps (UI, stage, hero, boss,
+  minions, effects); `buildScheme({ step })` moves stage, hero and boss to a new hue on every good
+  move (`checkScheme` keeps it readable). `heroSprite.js` paints the character design (every editor
+  option) as 28×36 sprites in side / front / back views and poses; `battle/art.js` paints parallax
+  landscapes once per battle and scrolls them by copying rows; `battle/draw.js` draws each mini-game.
+  `bossBattle.js` runs the loop (rules at 120 Hz, drawing at ≤ 60 fps), input, palette swaps and the
+  HTML rules cards; the 3D canvas is hidden meanwhile. Cost: the whole browser uses about a quarter of
+  the CPU it needs for a 3D level (see below).
+- **Unlocks** — a win unlocks an item from `UNLOCKABLES` in `character.js` (saved in localStorage),
+  rolled by rarity from `DROP_TABLE` for the boss's region (capstones one row better;
+  `store.rollReward`). After-trails (`trails.js`) are particles emitted behind the 3D hero (capped at
+  100), pixel sparkles in the battles, and a swoosh of glowing cubes as wardrobe art. `rewardScreen.js` shows it in 2D (the item is cut out of the hero sprite by painting
+  the hero with and without it), with `unlockPanel.js` buttons; the wardrobe (character screen in
+  wardrobe mode) can be opened before the next level.
+  Flow: `play → (arcade) → gem → battle → stage → (journey, at a region's end) → next level … → stars`. `?battles=0` skips battles, `?boss=<mode>` forces one.
+
+### 10. Supporting Modules
 
 #### Config (`src/config.js`)
 Centralized configuration constants:
@@ -328,7 +420,8 @@ Game Loop:
 ### Optimization Strategies
 
 1. **Physics**: Early exit on platform checks, use spatial partitioning for many platforms
-2. **Rendering**: Single draw call per object type, minimal shader switching
+2. **Rendering**: batched meshes, hidden-face removal, chunk culling, and the `test` preset's vertex
+   shading / baked sky / crisp half resolution for software WebGL — see `perf/README.md`
 3. **Particles**: Limit particle count, recycle when possible
 4. **Memory**: Reuse objects, avoid allocations in hot paths
 

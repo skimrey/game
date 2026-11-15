@@ -12,8 +12,8 @@
  *   const { level, audit } = generateLevel({ seed: 42, difficulty: 0.6 });
  */
 
-import { analyzeJump, auditLevel, topOf, RULES } from './levelAudit.js';
-import { auditFun, funRequirements, FUN_RULES } from './funAudit.js';
+import { analyzeJump, moveBetween, auditLevel, topOf, RULES, SPECIAL_MOVES } from './levelAudit.js';
+import { auditFun, funRequirements, routeTravel, FUN_RULES } from './funAudit.js';
 import { auditEncounters, encounterRequirement, ENCOUNTER_RULES } from './encounterAudit.js';
 import { enemyPosition, ENEMY_TYPES } from './enemies.js';
 
@@ -74,6 +74,33 @@ export function difficultyKnobs(d) {
 /** A false-path platform may not reach later route platforms (even with the air dash) within this multiple of the limit. */
 const DEAD_END_MARGIN = 1.12;
 
+/**
+ * The special moves the level being built allows (level.abilities: 'dash', 'glide',
+ * 'double'). Set per candidate; the "can you get there at all?" checks (dead ends,
+ * skips, tangles) use the easiest of them.
+ */
+let ABILITIES_NOW = ['dash'];
+function specialDifficulty(a, b) {
+  let best = Infinity;
+  for (const kind of ABILITIES_NOW) best = Math.min(best, analyzeJump(a, b, { moves: kind }).difficulty);
+  return best;
+}
+
+/** Techniques a generated level asks for by default: its region's abilities, plus bounce pads from the alpine tier on. */
+export function defaultTechniques(difficulty, abilities = ['dash']) {
+  return {
+    dash: abilities.includes('dash') ? 1 : 0,
+    glide: abilities.includes('glide') ? 1 : 0,
+    double: abilities.includes('double') ? 1 : 0,
+    spring: difficulty >= 0.3 ? 1 : 0,
+  };
+}
+
+/** Abilities by difficulty (standalone levels): the dash; gliding from 0.3; the double jump from 0.65. */
+export function abilitiesForDifficulty(d) {
+  return d >= 0.65 ? ['dash', 'glide', 'double'] : d >= 0.3 ? ['dash', 'glide'] : ['dash'];
+}
+
 const LIMITS = { xMax: 9, branchXMax: 10.5, topMin: 0.5, topMax: 14, clearance: 0.6, verticalClearance: 3 };
 
 /**
@@ -94,14 +121,19 @@ export const VARIANT_TINTS = {
 // Course: placement bookkeeping shared by all patterns
 // ---------------------------------------------------------------------------
 class Course {
-  constructor(rng, difficulty) {
+  constructor(rng, difficulty, theme = null) {
     this.r = makeRandom(rng);
     this.d = difficulty;
     this.k = difficultyKnobs(difficulty);
+    this.theme = theme;
     this.platforms = [];
     this.main = [];        // indices of main-route platforms, in order
     this.branches = [];    // false paths: { junction: position in main, platforms: [indices] }
+    this.shortcuts = [];   // shortcuts: { from, to: positions in main, platforms: [indices] }
     this.arenas = [];      // main-route positions of arena platforms (ground encounters)
+    this.dashGaps = [];    // main-route positions of platforms reached by a required special move (dash, glide, double, bounce)
+    this.dashDifficulty = []; // … and how hard each of those moves is
+    this.techniques = { dash: 0, glide: 0, double: 0, spring: 0 };   // special moves placed so far
     this.segments = [];
     this.cursor = null;
     this.lastMove = null;
@@ -123,7 +155,7 @@ class Course {
   awayFromBranches(c) {
     if (!this.branches.length) return true;
     const cand = { x: c.x, y: c.top - 0.5, z: c.z, width: c.width, height: 1, depth: c.depth };
-    return this.branches.every(b => b.platforms.every(i => analyzeJump(this.platforms[i], cand, { moves: 'dash' }).difficulty > DEAD_END_MARGIN));
+    return this.branches.every(b => b.platforms.every(i => specialDifficulty(this.platforms[i], cand) > DEAD_END_MARGIN && analyzeJump(this.platforms[i], cand).difficulty > DEAD_END_MARGIN));
   }
 
   size(scale = 1) {
@@ -156,7 +188,51 @@ class Course {
     const j = analyzeJump(this.current, cand);
     if (j.kind !== 'jump' || j.difficulty < band[0] || j.difficulty > band[1]) return false;
     const previous = this.platforms[this.main[this.main.length - 2]];
-    return !previous || analyzeJump(previous, cand).difficulty > Math.max(j.difficulty, band[1]) + 0.05;
+    return (!previous || analyzeJump(previous, cand).difficulty > Math.max(j.difficulty, band[1]) + 0.05) && this.noDashSkip(cand);
+  }
+
+  /**
+   * Once the route needs the air dash, the planner takes as few dashes as possible, then
+   * the easiest, then the fewest hops. A dash from a platform *before* a dash landing
+   * straight to a later platform — at most as hard as the designed dash — would replace
+   * that dash and skip part of the design, so no such candidate is placed.
+   */
+  noDashSkip(cand) {
+    for (const [k, landing] of this.dashGaps.entries()) {
+      if (this.main.length - landing > 5) continue;           // long gone: far out of reach
+      const limit = this.dashDifficulty[k] + 0.08;
+      for (let pos = Math.max(0, landing - 5); pos < landing; pos++) {
+        if (specialDifficulty(this.platforms[this.main[pos]], cand) <= limit) return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * A gap only the air dash crosses: a plain jump falls clearly short (> 102% of its
+   * limit), the dash lands within `band` of its own limit, and no earlier route
+   * platform can dash there instead.
+   */
+  dashOk(c, band, kind = 'dash') {
+    const cand = { x: c.x, y: c.top - 0.5, z: c.z, width: c.width, height: 1, depth: c.depth };
+    // off a bounce pad the only move is the bounce; otherwise a plain jump must fall clearly short
+    if (!this.current.spring && analyzeJump(this.current, cand).difficulty <= 1.02) return false;
+    const move = kind === 'spring' ? analyzeJump(this.current, cand) : analyzeJump(this.current, cand, { moves: kind });
+    if (move.difficulty < band[0] || move.difficulty > band[1]) return false;
+    // the route planner tries dash → glide → double jump: the ones before this kind mustn't be comfortable
+    if (kind !== 'spring') {
+      for (const k of SPECIAL_MOVES) {
+        if (k === kind) break;
+        if (ABILITIES_NOW.includes(k) && analyzeJump(this.current, cand, { moves: k }).difficulty <= RULES.HARD_JUMP + 0.05) return false;
+      }
+    }
+    const from = Math.max(0, this.main.length - 6);
+    for (let pos = from; pos < this.main.length - 1; pos++) {
+      const p = this.platforms[this.main[pos]];
+      if (p.spring) continue;
+      if (analyzeJump(p, cand).difficulty <= 1.05 || specialDifficulty(p, cand) <= RULES.QUALITY_CAP + 0.08) return false;
+    }
+    return true;
   }
 
   /** Centre-to-centre move from the current platform to a candidate. */
@@ -172,12 +248,25 @@ class Course {
     return Math.hypot(m.dx - l.dx, m.dy - l.dy, m.dz - l.dz) >= FUN_RULES.MIN_PLACEMENT_DIFFERENCE + 0.15;
   }
 
-  /** Sample candidates from `make` until one fits; place it. */
-  tryPlace(make, { band, attempts = 30 } = {}) {
+  /**
+   * Sample candidates from `make` until one fits; place it. `dash`: the jump must need that
+   * special move — true / 'dash' (the air dash), 'glide', 'double' or 'spring' (the bounce off the pad it starts on).
+   */
+  tryPlace(make, { band, attempts = 30, dash = false } = {}) {
+    const kind = dash === true ? 'dash' : dash;
     for (let i = 0; i < attempts; i++) {
       const c = make(this.current);
       c.x = this.r.snap(c.x); c.z = this.r.snap(c.z); c.top = this.r.snap(c.top, 0.1);
-      if (this.fits(c) && this.variedEnough(c) && this.jumpOk(c, band) && this.awayFromBranches(c)) return this.add(c);
+      if (!this.fits(c) || !this.variedEnough(c) || !this.awayFromBranches(c)) continue;
+      if (kind ? !this.dashOk(c, band, kind) : !this.jumpOk(c, band)) continue;
+      const from = this.current;
+      const placed = this.add(c);
+      if (kind) {
+        this.dashGaps.push(this.main.length - 1);
+        this.dashDifficulty.push(kind === 'spring' ? analyzeJump(from, placed).difficulty : analyzeJump(from, placed, { moves: kind }).difficulty);
+        this.techniques[kind]++;
+      }
+      return placed;
     }
     return null;
   }
@@ -379,9 +468,12 @@ const PATTERNS = {
     return c.tryPlace(cur => {
       const size = c.size();
       const lateral = r.chance(0.6);
+      // climb: from the ledge ~1.0–1.3 below, the route ahead is then more than a jump's
+      // height (1.57) up — out of reach of any dash, however close
+      const rise = ABILITIES_NOW.includes('double') ? r.range(0.85, Math.max(1.0, c.k.maxRise)) : r.range(0.62, Math.max(0.8, c.k.maxRise));
       return lateral
-        ? { x: cur.x + away * ((cur.width + size) / 2 + r.range(0.4, 2)), z: cur.z + r.range(0, 1.8), top: topOf(cur) + r.range(lerp(0.2, 0.6, c.d), c.k.maxRise), width: size, depth: size }
-        : c.ahead(cur, { gap: r.range(0.5, 2.4), dx: away * r.range(0.5, 2.5), rise: r.range(lerp(0.3, 0.6, c.d), c.k.maxRise), width: size, depth: size });
+        ? { x: cur.x + away * ((cur.width + size) / 2 + r.range(0.4, 2)), z: cur.z + r.range(0, 1.8), top: topOf(cur) + rise, width: size, depth: size }
+        : c.ahead(cur, { gap: r.range(0.5, 2.4), dx: away * r.range(0.5, 2.5), rise, width: size, depth: size });
     }, { band: [0, c.k.band[1]], attempts: 60 }) ? 1 : 0;
   },
 
@@ -402,6 +494,70 @@ const PATTERNS = {
     return placed ? 1 : 0;
   },
 
+  /** A chasm only the air dash crosses, onto a wide landing. */
+  dashGap(c) {
+    const { r } = c;
+    const band = [lerp(0.42, 0.55, c.d), lerp(0.62, 0.78, c.d)];
+    return c.tryPlace(cur => {
+      const size = r.snap(r.range(3, 4.2));
+      return c.ahead(cur, { gap: r.range(4.4, 6.8), dx: r.range(-1.5, 1.5), rise: c.vrise(-1.4, 0.4), width: size, depth: r.snap(r.range(3, 4)) });
+    }, { band, dash: true, attempts: 80 }) ? 1 : 0;
+  },
+
+  /** A long way down and far across: only gliding (hold jump while falling) makes it. */
+  glideGap(c) {
+    const { r } = c;
+    const top = topOf(c.current);
+    if (top < LIMITS.topMin + 2.6) return 0;
+    const band = [lerp(0.4, 0.5, c.d), lerp(0.62, 0.76, c.d)];
+    return c.tryPlace(cur => c.ahead(cur, {
+      gap: r.range(6, 10), dx: r.range(-3.5, 3.5), rise: -r.range(2.2, Math.min(5, top - LIMITS.topMin)),
+      width: r.snap(r.range(3, 4.2)), depth: r.snap(r.range(3, 4)),
+    }), { band, dash: 'glide', attempts: 80 }) ? 1 : 0;
+  },
+
+  /** A wall too tall for one jump: only the double jump climbs it. */
+  doubleWall(c) {
+    const { r } = c;
+    const band = [lerp(0.5, 0.6, c.d), lerp(0.7, 0.8, c.d)];
+    return c.tryPlace(cur => c.ahead(cur, {
+      gap: r.range(0.4, 2.6), dx: r.range(-3, 3), rise: r.range(1.8, 2.5),
+      width: r.snap(r.range(2.6, 3.6)), depth: r.snap(r.range(2.6, 3.4)),
+    }), { band, dash: 'double', attempts: 80 }) ? 1 : 0;
+  },
+
+  /** A bounce pad, then a ledge high above that only its bounce reaches. */
+  springPad(c) {
+    const { r } = c;
+    if (topOf(c.current) > 9.5) return 0;
+    const pad = c.tryPlace(cur => c.ahead(cur, {
+      gap: r.range(0.6, 2), dx: r.range(-1.5, 1.5), rise: c.rise(-0.8, 0.2), width: 1.6, depth: 1.6,
+    }), { band: [0, c.k.band[1]], attempts: 40 });
+    if (!pad) return 0;
+    pad.spring = true;
+    const ledge = c.tryPlace(cur => c.ahead(cur, {
+      gap: r.range(0.4, 1.8), dx: r.range(-1.5, 1.5), rise: r.range(3.0, 3.7), width: r.snap(r.range(3, 4)), depth: r.snap(r.range(3, 4)),
+    }), { band: [0.3, lerp(0.7, 0.8, c.d)], dash: 'spring', attempts: 80 });
+    if (!ledge) {                                   // no way up: take the pad back out
+      c.platforms.pop(); c.main.pop();
+      c.cursor = c.main.at(-1);
+      c.lastMove = null;
+      return 0;
+    }
+    return 2;
+  },
+
+  /** A leap of faith: a long drop (≥ RULES.LONG_DROP) onto a wide landing. */
+  leap(c) {
+    const { r } = c;
+    const top = topOf(c.current);
+    if (top < LIMITS.topMin + RULES.LONG_DROP + 0.3) return 0;
+    return c.tryPlace(cur => c.ahead(cur, {
+      gap: r.range(1.2, 3.8), dx: r.range(-2, 2), rise: -r.range(RULES.LONG_DROP + 0.1, Math.min(4.5, top - LIMITS.topMin)),
+      width: r.snap(r.range(3.5, 4.5)), depth: r.snap(r.range(3, 4)),
+    }), { band: [0, c.k.band[1]], attempts: 60 }) ? 1 : 0;
+  },
+
   /** A wide checkpoint-style platform to breathe on. */
   rest(c) {
     const { r } = c;
@@ -412,14 +568,30 @@ const PATTERNS = {
   },
 };
 
-function patternWeights(d) {
+function patternWeights(d, theme = null) {
   // Harder levels lean on patterns that travel sideways and up/down.
-  return {
+  const w = {
     hop: lerp(3, 1.2, d), stairs: 1.6, zigzag: 2, switchback: lerp(1, 2.4, d), descent: lerp(0.8, 1.6, d),
     valley: lerp(0.6, 2.4, d), climbTurn: lerp(0.4, 2.4, d),
     stones: lerp(0.5, 1.8, d), beam: lerp(0.4, 1, d), tower: d < 0.35 ? 0 : 2 * d,
   };
+  for (const [name, k] of Object.entries(THEMES[theme]?.weights || {})) w[name] = (w[name] || 0.5) * k;
+  return w;
 }
+
+/**
+ * Themes give generated levels a recognisable shape, so two levels of a tier don't
+ * blur together: each biases the pattern mix and asks for a little more of its
+ * signature move (on top of the fun requirements).
+ */
+export const THEMES = {
+  ascent: { label: 'Ascent', about: 'climbs high on towers and stairs, then leaps down', weights: { tower: 4, stairs: 2.5, climbTurn: 2, descent: 0.3, valley: 0.5, hop: 0.6 }, extra: { longDrops: 1 } },
+  skyway: { label: 'Skyway', about: 'long crossings: beams, stepping stones and dash chasms', weights: { beam: 3, stones: 2, valley: 1.5, hop: 1, tower: 0.8 }, extra: { dashes: 1 } },
+  switchbacks: { label: 'Switchbacks', about: 'winds left and right, with a shortcut for the bold', weights: { zigzag: 3, switchback: 3.5, climbTurn: 2, hop: 0.5, beam: 0.5 }, extra: { shortcuts: 1 } },
+  cascade: { label: 'Cascade', about: 'a tall start, then tumbling down ledges and drops', weights: { descent: 3.5, valley: 2.5, tower: 2, hop: 0.7 }, extra: { longDrops: 1 } },
+  gauntlet: { label: 'Gauntlet', about: 'arenas and wisps between the jumps', weights: { stones: 1.5, switchback: 1.5 }, extra: { encounters: 1 } },
+};
+export const THEME_NAMES = Object.keys(THEMES);
 
 /** Travel so far along the main route (same measures as the fun audit). */
 function travelSoFar(c) {
@@ -439,7 +611,7 @@ function travelSoFar(c) {
 
 /** Pick the next pattern, steering toward whatever the fun requirements still lack. */
 function choosePattern(c, weights, last, progress) {
-  const req = funRequirements(c.d);
+  const req = funRequirements(c.d, ABILITIES_NOW);
   const t = travelSoFar(c);
   const needs = [];
   if (t.verticalRatio < req.verticalRatio * 1.35) needs.push('valley', 'climbTurn', 'descent', 'stairs', 'tower');
@@ -465,6 +637,9 @@ const NOUNS = ['Steps', 'Heights', 'Crossing', 'Ascent', 'Ridge', 'Trail', 'Gard
 // ---------------------------------------------------------------------------
 // False paths (hand-written rules): tempting, dead-end, recoverable branches
 // ---------------------------------------------------------------------------
+/** Could a player get from a to b at all — a plain jump, or an air dash, near the limit? */
+const reachable = (a, b) => analyzeJump(a, b).difficulty <= 1.05 || specialDifficulty(a, b) <= 1.05;
+
 /**
  * Grow a dead-end branch off main-route platform `junction`.
  *  - tempting:     heads forward/sideways and is easy to enter (never harder than the route)
@@ -488,36 +663,44 @@ function growFalsePath(c, junctionPos, length) {
     for (let attempt = 0; attempt < 60 && !placed; attempt++) {
       const cur = c.platforms[from];
       const size = c.size();
-      // mostly head away from the route and downward: from below, later (higher)
-      // route platforms are out of reach, but climbing back to the junction is easy
+      // mostly head away from the route and downward: from a ledge about a metre below
+      // the junction, the (climbing) route ahead is out of reach even with the air dash —
+      // more than a jump's height above — while climbing back to the junction stays easy
       const side = r.chance(0.8) ? away : -away;
-      const drop = r.chance(0.65);
       const cand = {
-        x: r.snap(cur.x + side * ((cur.width + size) / 2 + r.range(0.3, 3.2))),
+        x: r.snap(cur.x + side * ((cur.width + size) / 2 + r.range(0.3, step === 0 ? 2.2 : 3.2))),
         z: r.snap(cur.z + r.range(-0.3, 2.4)),
-        top: r.snap(topOf(cur) + (drop ? r.range(-1.4, -0.5) : r.range(0.3, Math.min(1, c.k.maxRise))), 0.1),
+        // with the double jump, "out of reach" means more than a double jump's height below
+        top: r.snap(topOf(cur) + (step === 0 ? (ABILITIES_NOW.includes('double') ? r.range(-2.55, -2.2) : r.range(-1.3, -1.05)) : r.range(-0.9, 0.3)), 0.1),
         width: size, depth: size,
       };
+      // further steps stay well below the junction, where the route ahead can't be reached
+      if (step > 0 && cand.top > topOf(jp) - (ABILITIES_NOW.includes('double') ? 2.15 : 1.0)) continue;
       c.cursor = from;
       const fits = c.fits(cand, LIMITS.branchXMax);
       c.cursor = c.main[c.main.length - 1];
       if (!fits) continue;
       const p = asPlatform(cand);
-      const into = analyzeJump(cur, p), back = analyzeJump(p, cur);
+      const into = analyzeJump(cur, p);
+      // climbing back may take the level's special moves (a double jump out of a deep spur)
+      const back = { difficulty: Math.min(analyzeJump(p, cur).difficulty, ABILITIES_NOW.includes('double') ? analyzeJump(p, cur, { moves: 'double' }).difficulty : Infinity) };
       // an easy way in is what makes a false path tempting; it just has to be a real jump
       if (into.kind !== 'jump' || into.difficulty > c.k.band[1]) continue;
-      if (back.difficulty > Math.min(c.k.band[1] + 0.1, RULES.HARD_JUMP)) continue;
-      const leaks = route.some((m, i) => i !== junctionPos && (i > junctionPos
-        ? analyzeJump(p, m, { moves: 'dash' }).difficulty <= DEAD_END_MARGIN   // even a dash can't carry you onward
-        : analyzeJump(p, m).difficulty <= 1.05));
+      // climbing back out may be a stiff jump (the price of exploring) but stays fair
+      if (back.difficulty > RULES.QUALITY_CAP - 0.05) continue;
+      // even a dash can't carry you onward (hopping back to an earlier route platform is fine:
+      // that leads nowhere new either)
+      const leaks = route.some((m, i) => i > junctionPos && (specialDifficulty(p, m) <= DEAD_END_MARGIN || analyzeJump(p, m).difficulty <= DEAD_END_MARGIN));
       if (leaks) continue;
-      // entering from *before* the junction would turn it into a detour back onto the route
-      const sideEntry = route.some((m, i) => i < junctionPos && analyzeJump(m, p).difficulty <= 1.05);
+      // jumping in from *before* the junction would turn it into a detour; dashing in from two
+      // or more platforms back (then climbing to the junction) would make it a shortcut
+      const sideEntry = route.some((m, i) => i < junctionPos && (analyzeJump(m, p).difficulty <= RULES.QUALITY_CAP + 0.05 ||
+        (i < junctionPos - 1 && specialDifficulty(m, p) <= RULES.QUALITY_CAP + 0.05)));
       if (sideEntry) continue;
-      // keep separate false paths separate (no tangles of merged spurs)
-      const tangled = c.branches.some(b => b.platforms.some(i => {
+      // keep separate false paths (and shortcuts) separate (no tangles of merged spurs)
+      const tangled = [...c.branches, ...c.shortcuts].some(b => b.platforms.some(i => {
         const o = c.platforms[i];
-        return analyzeJump(o, p).difficulty <= 1.05 || analyzeJump(p, o).difficulty <= 1.05;
+        return reachable(o, p) || reachable(p, o);
       }));
       if (tangled) continue;
       placed = p;
@@ -529,6 +712,63 @@ function growFalsePath(c, junctionPos, length) {
   }
   if (added.length) c.branches.push({ junction: junctionPos, platforms: added });
   return added;
+}
+
+// ---------------------------------------------------------------------------
+// Shortcuts (hand-written rules): a non-obvious way past part of the course
+// ---------------------------------------------------------------------------
+/**
+ * Place a shortcut platform off the line between main-route positions `from` and
+ * `from + span`: enter it from `from`, leave it onto `from + span`, skipping the route
+ * platforms in between.
+ *  - non-obvious:  off to the side of the route, and at least one of its two moves needs
+ *                  the air dash (so plain-jump players never stumble onto it, and the
+ *                  route planner — plain jumps first — never takes it)
+ *  - fair:         both moves within the route's difficulty band (with their move)
+ *  - worth it:     skips ≥ 1 route platform; with span ≥ 3 it also saves hops
+ *  - separate:     no tangles with false paths, nothing else enters it from earlier
+ */
+function growShortcut(c, from, span) {
+  const { r } = c;
+  const route = c.main.map(i => c.platforms[i]);
+  const a = route[from], b = route[from + span];
+  if (!a || !b || c.dashGaps.some(g => g > from && g <= from + span)) return null;
+  const hi = Math.min(c.k.band[1] + 0.1, RULES.QUALITY_CAP - 0.05);
+  const asPlatform = k => ({ x: k.x, y: k.top - 0.5, z: k.z, width: k.width, height: 1, depth: k.depth });
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const t = r.range(0.35, 0.65);
+    const size = r.snap(r.range(1.6, 2.4));
+    // off the line from a to b, on either side
+    const lx = b.z - a.z, lz = -(b.x - a.x), l = Math.hypot(lx, lz) || 1;
+    const off = r.sign() * r.range(2.5, 5);
+    const cand = {
+      x: r.snap(a.x + (b.x - a.x) * t + (lx / l) * off),
+      z: r.snap(a.z + (b.z - a.z) * t + (lz / l) * off),
+      top: r.snap(topOf(a) + (topOf(b) - topOf(a)) * t + r.range(-0.4, 0.4), 0.1),
+      width: size, depth: size,
+    };
+    c.cursor = c.main[from];
+    const fits = c.fits(cand, LIMITS.branchXMax);
+    c.cursor = c.main[c.main.length - 1];
+    if (!fits) continue;
+    const p = asPlatform(cand);
+    const into = moveBetween(a, p, RULES.QUALITY_CAP, ABILITIES_NOW), out = moveBetween(p, b, RULES.QUALITY_CAP, ABILITIES_NOW);
+    if (into.difficulty > hi || out.difficulty > hi) continue;
+    if (!SPECIAL_MOVES.includes(into.kind) && !SPECIAL_MOVES.includes(out.kind)) continue;
+    if (a.spring || b.spring) continue;
+    // nothing earlier on the route gets in; no route platform between makes it a plain detour
+    if (route.some((m, i) => i < from && reachable(m, p))) continue;
+    if (route.some((m, i) => i > from && i < from + span && analyzeJump(m, p).difficulty <= RULES.QUALITY_CAP && analyzeJump(p, route[i + 1]).difficulty <= RULES.QUALITY_CAP)) continue;
+    // it mustn't lead further than designed (past `from + span`)
+    if (route.some((m, i) => i > from + span && reachable(p, m))) continue;
+    const tangled = c.branches.some(br => br.platforms.some(i => reachable(c.platforms[i], p) || reachable(p, c.platforms[i])));
+    if (tangled) continue;
+    c.platforms.push(p);
+    const index = c.platforms.length - 1;
+    c.shortcuts.push({ from, to: from + span, platforms: [index] });
+    return index;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -597,18 +837,37 @@ function placeEnemies(c, difficulty, wanted) {
 // ---------------------------------------------------------------------------
 // Build one candidate
 // ---------------------------------------------------------------------------
-function buildCandidate(rng, difficulty) {
-  const c = new Course(rng, difficulty);
+const TECHNIQUE_PATTERN = { dash: 'dashGap', glide: 'glideGap', double: 'doubleWall', spring: 'springPad' };
+
+function buildCandidate(rng, difficulty, theme = null, { abilities = ['dash'], techniques = null } = {}) {
+  ABILITIES_NOW = abilities;
+  const c = new Course(rng, difficulty, theme);
   const { r } = c;
   c.add({ x: 0, z: 0, top: 0.5, width: 5, depth: 5 });
 
   const segmentCount = c.k.segments + r.int(0, 1);
-  const weights = patternWeights(difficulty);
-  const wanted = funRequirements(difficulty).falsePaths + (difficulty >= 0.5 || (difficulty > 0.1 && r.chance(0.35)) ? 1 : 0);
+  const weights = patternWeights(difficulty, theme);
+  const req = funRequirements(difficulty, abilities);
+  const extra = THEMES[theme]?.extra || {};
+  // special techniques: the region's (see defaultTechniques), the theme's extra dashes, and at
+  // least as many special moves in all as the fun requirements ask for
+  const wantedTech = { ...(techniques || defaultTechniques(difficulty, abilities)) };
+  for (const k of Object.keys(wantedTech)) if (k !== 'spring' && !abilities.includes(k)) wantedTech[k] = 0;
+  if (abilities.includes('dash')) wantedTech.dash += extra.dashes || 0;
+  const totalTech = () => Object.values(wantedTech).reduce((a, b) => a + b, 0);
+  if (totalTech() < req.dashes && abilities.includes('dash')) wantedTech.dash += req.dashes - totalTech();
+  const techQueue = [];
+  for (const [k, n] of Object.entries(wantedTech)) for (let i = 0; i < n; i++) techQueue.push(k);
+  for (let k = techQueue.length - 1; k > 0; k--) { const m = r.int(0, k); [techQueue[k], techQueue[m]] = [techQueue[m], techQueue[k]]; }
+  const wantedDashes = techQueue.length;
+  const wantedLeaps = req.longDrops + (extra.longDrops || 0);
+  const wantedShortcuts = req.shortcuts + (extra.shortcuts || 0);
+  let leaps = 0;
+  const wanted = req.falsePaths + (difficulty >= 0.5 || (difficulty > 0.1 && r.chance(0.35)) ? 1 : 0);
   const branchLength = () => r.int(1, 1 + Math.round(2 * difficulty));
-  const forkAllowed = pos => pos >= 1 && c.branches.every(b => Math.abs(b.junction - pos) >= 2);
+  const forkAllowed = pos => pos >= 1 && !c.platforms[c.main[pos]]?.spring && c.branches.every(b => Math.abs(b.junction - pos) >= 2);
   // Encounters: ground fights on arenas (scheduled now), wisps across jumps (added later)
-  const wantedEncounters = encounterRequirement(difficulty);
+  const wantedEncounters = encounterRequirement(difficulty) + (extra.encounters || 0);
   // Wide arenas add flat forward travel; at higher difficulty lean on wisps (airborne encounters) instead
   const wantedGround = difficulty < 0.25 ? wantedEncounters : Math.max(1, Math.floor(wantedEncounters * lerp(0.6, 0.45, difficulty) + 0.5));
   let last = null, sinceRest = 0;
@@ -618,6 +877,24 @@ function buildCandidate(rng, difficulty) {
         c.main.length >= 2 && c.main.length - lastArena >= 3 && PATTERNS.arena(c)) {
       c.segments.push('arena');
       sinceRest = 0;
+    }
+    // Technique gaps (dash chasms, glide gaps, double-jump walls, bounce pads) and leaps of faith,
+    // spread through the level (glides and leaps once the course is high enough)
+    const progress = (i + 1) / segmentCount;
+    const placedTech = wantedDashes - techQueue.length;
+    if (techQueue.length && progress >= (placedTech + 0.4) / wantedDashes && c.main.length >= 3) {
+      const kind = techQueue.find(k => k !== 'glide' || topOf(c.current) >= LIMITS.topMin + 2.6) || null;
+      if (kind && PATTERNS[TECHNIQUE_PATTERN[kind]](c)) {
+        techQueue.splice(techQueue.indexOf(kind), 1);
+        c.segments.push(TECHNIQUE_PATTERN[kind]);
+        sinceRest = 0;
+      } else if (techQueue.includes('glide') && topOf(c.current) < LIMITS.topMin + 2.6 && PATTERNS.tower(c)) {
+        c.segments.push('tower');                 // climb first: a glide needs height to come down from
+      }
+    }
+    if (leaps < wantedLeaps && progress >= (leaps + 0.5) / (wantedLeaps + 0.5) && PATTERNS.leap(c)) {
+      c.segments.push('leap');
+      leaps++;
     }
     // Forks: spread the false paths through the level; the route then moves on away from them
     if (c.branches.length < wanted && (i + 1) / segmentCount >= (c.branches.length + 0.5) / wanted && forkAllowed(c.main.length - 1)) {
@@ -640,6 +917,13 @@ function buildCandidate(rng, difficulty) {
     }
   }
 
+  // Still short of a required technique or leap? One last try before the goal.
+  for (const kind of [...techQueue]) {
+    if (kind === 'glide' && topOf(c.current) < LIMITS.topMin + 2.6) { PATTERNS.tower(c); PATTERNS.tower(c); }
+    if (PATTERNS[TECHNIQUE_PATTERN[kind]](c)) { techQueue.splice(techQueue.indexOf(kind), 1); c.segments.push(TECHNIQUE_PATTERN[kind]); }
+  }
+  while (leaps < wantedLeaps && PATTERNS.leap(c)) { c.segments.push('leap'); leaps++; }
+
   // Goal platform: a comfortable, wide final jump.
   const goalPlatform = c.tryPlace(cur => c.ahead(cur, {
     gap: r.range(0.8, 2.2), dx: r.range(-1.5, 1.5), rise: c.rise(-0.4, 0.6), width: 4, depth: 4,
@@ -654,14 +938,41 @@ function buildCandidate(rng, difficulty) {
     if (forkAllowed(pos)) growFalsePath(c, pos, branchLength());
   }
 
+  // Shortcuts: somewhere along the finished route (longer skips first — they save hops)
+  for (const span of [4, 3, 2]) {
+    const starts = Array.from({ length: Math.max(0, c.main.length - span - 1) }, (_, k) => k + 1);
+    for (let k = starts.length - 1; k > 0; k--) { const m = r.int(0, k); [starts[k], starts[m]] = [starts[m], starts[k]]; }
+    for (const from of starts) {
+      if (c.shortcuts.length >= wantedShortcuts) break;
+      if (c.shortcuts.some(sc => from < sc.to + 1 && from + span > sc.from - 1)) continue;   // keep them apart
+      growShortcut(c, from, span);
+    }
+  }
+
+  // Cheap pre-checks: don't spend an audit on a design that can't meet the fun requirements
+  const travel = routeTravel(c.platforms, c.main);
+  const short = [
+    [c.branches.length < req.falsePaths, 'TOO_FEW_FALSE_PATHS'],
+    [c.dashGaps.length < req.dashes, 'TOO_FEW_DASHES'],
+    ...Object.entries(wantedTech).map(([k, n]) => [c.techniques[k] < n, `TOO_FEW_${k.toUpperCase()}`]),
+    [leaps < req.longDrops, 'TOO_FEW_DROPS'],
+    [c.shortcuts.length < req.shortcuts, 'TOO_FEW_SHORTCUTS'],
+    [travel.directions.size < req.directions, 'TOO_FEW_DIRECTIONS'],
+    [travel.lateralRatio < req.lateralRatio, 'TOO_LITTLE_LATERAL'],
+    [travel.verticalRatio < req.verticalRatio, 'TOO_LITTLE_VERTICAL'],
+    [travel.turns < req.turns, 'TOO_FEW_TURNS'],
+  ].filter(([fails]) => fails).map(([, code]) => code);
+  if (short.length) return { precheck: short };
+
   const variant = r.pick(VARIANTS);
   const enemies = placeEnemies(c, difficulty, wantedEncounters);
 
-  // Renumber: main route first (0..n-1, in order), then false-path platforms
-  const order = [...c.main, ...c.branches.flatMap(b => b.platforms)];
+  // Renumber: main route first (0..n-1, in order), then false-path platforms, then shortcuts
+  const order = [...c.main, ...c.branches.flatMap(b => b.platforms), ...c.shortcuts.flatMap(sc => sc.platforms)];
   const renumber = new Map(order.map((old, i) => [old, i]));
   const platforms = order.map(i => c.platforms[i]);
   const falsePaths = c.branches.map(b => ({ junction: b.junction, platforms: b.platforms.map(i => renumber.get(i)) }));
+  const shortcuts = c.shortcuts.map(sc => ({ from: sc.from, to: sc.to, platforms: sc.platforms.map(i => renumber.get(i)) }));
 
   return {
     name: `${r.pick(ADJECTIVES)} ${r.pick(NOUNS)}`,
@@ -669,7 +980,8 @@ function buildCandidate(rng, difficulty) {
     platforms,
     goal: { x: goalPlatform.x, y: topOf(goalPlatform), z: goalPlatform.z, radius: 1 },
     enemies: enemies.map(e => (e.platform === undefined ? e : { ...e, platform: renumber.get(e.platform) })),
-    meta: { generated: true, difficulty, variant, segments: c.segments, mainRoute: c.main.length, falsePaths },
+    abilities: [...abilities],
+    meta: { generated: true, difficulty, ...(theme ? { theme } : {}), variant, segments: c.segments, mainRoute: c.main.length, falsePaths, shortcuts, techniques: wantedTech },
   };
 }
 
@@ -693,7 +1005,12 @@ export function generatedRejections(audit, level) {
     if (route.length !== designed || route.some((p, i) => p !== i)) reasons.push('DESIGN_SKIPPED');
     const fun = auditFun(level, audit, level.meta.difficulty);
     reasons.push(...fun.issues.map(i => i.code));
-    if (fun.metrics?.branches.some(b => b.kind !== 'false')) reasons.push('STRAY_BRANCH');
+    // every branch is a designed false path (dead end) or a designed shortcut (alternate)
+    const designedShortcut = new Set((level.meta.shortcuts || []).flatMap(sc => sc.platforms));
+    for (const b of fun.metrics?.branches || []) {
+      const shortcut = b.platforms.every(i => designedShortcut.has(i));
+      if (shortcut ? b.kind !== 'alternate' : b.kind !== 'false') reasons.push(shortcut ? 'SHORTCUT_BROKEN' : 'STRAY_BRANCH');
+    }
     if (!reasons.length) reasons.push(...auditEncounters(level, audit).errors.map(e => e.code)); // costliest check last
   }
   return reasons.length ? [...new Set(reasons)] : null;
@@ -708,14 +1025,17 @@ export function acceptGenerated(audit, level) {
  * Deterministic for a given (seed, difficulty).
  * @returns {{ level, audit, attempts, rejections: string[] }}
  */
-export function generateLevel({ seed = 1, difficulty = 0.5, maxAttempts = 400, startAttempt = 1, trusted = false } = {}) {
+export function generateLevel({ seed = 1, difficulty = 0.5, theme = null, maxAttempts = 800, startAttempt = 1, trusted = false, abilities = null, techniques = null } = {}) {
+  abilities ||= abilitiesForDifficulty(difficulty);
+  if (theme && !THEMES[theme]) throw new Error(`Unknown theme "${theme}" (${THEME_NAMES.join(', ')})`);
   // startAttempt: skip candidates already known to be rejected (same result, faster).
   // trusted: with startAttempt, skip re-validating a candidate the test suite already verifies.
   const rejections = [];
   for (let attempt = startAttempt - 1; attempt < maxAttempts; attempt++) {
-    const rng = mulberry32(hashSeed('level', seed, difficulty.toFixed(3), attempt));
-    const level = buildCandidate(rng, difficulty);
+    const rng = mulberry32(theme ? hashSeed('level', seed, difficulty.toFixed(3), theme, attempt) : hashSeed('level', seed, difficulty.toFixed(3), attempt));
+    const level = buildCandidate(rng, difficulty, theme, { abilities, techniques });
     if (!level) { rejections.push('BOXED_IN'); continue; }
+    if (level.precheck) { rejections.push(...level.precheck); continue; }
     if (trusted) {
       level.meta = { ...level.meta, seed, attempts: attempt + 1 };
       return { level, audit: null, attempts: attempt + 1, rejections };
