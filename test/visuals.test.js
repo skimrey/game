@@ -1,15 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { levels, TIERS, tierOf, tierForDifficulty } from '../src/levels.js';
-import { BIOMES, BIOME_LIST } from '../src/biomes.js';
-import { MATERIALS, TEXTURE_IDS } from '../src/materials.js';
-import { PAINTER_IDS } from '../src/textures.js';
-import { auditLevel } from '../src/levelAudit.js';
-import { generateLevel } from '../src/levelGenerator.js';
-import { buildScenery, auditScenery, routeSamples } from '../src/scenery.js';
-import { auditBiome, auditTierBackgrounds } from '../src/visualAudit.js';
-import { chaseCamera } from '../src/camera.js';
-import { Config } from '../src/config.js';
+import { levels, TIERS, tierOf, tierForDifficulty } from '../src/levels/index.js';
+import { BIOMES, BIOME_LIST } from '../src/world/biomes.js';
+import { MATERIALS, TEXTURE_IDS } from '../src/engine/materials.js';
+import { PAINTER_IDS } from '../src/engine/textures.js';
+import { auditLevel } from '../src/levels/audit.js';
+import { generateLevel } from '../src/levels/generator.js';
+import { buildScenery, auditScenery, routeSamples } from '../src/world/scenery.js';
+import { auditBiome, auditTierBackgrounds } from '../src/levels/visualAudit.js';
+import { chaseCamera } from '../src/engine/camera.js';
+import { ZONES } from '../src/world/zones.js';
+import { Config } from '../src/engine/config.js';
 
 const codes = result => result.errors.map(e => e.code);
 
@@ -42,6 +43,14 @@ test('every tier background is clearly distinct from every other', () => {
   const result = auditTierBackgrounds(TIERS);
   assert.ok(result.ok, JSON.stringify(result.issues));
   assert.equal(result.pairs.length, (TIERS.length * (TIERS.length - 1)) / 2);
+});
+
+test('every zone background is clearly distinct from every other (a run may visit any four)', () => {
+  const zones = Object.values(ZONES).map(z => ({ id: z.id, name: z.name, biome: z.biome }));
+  const result = auditTierBackgrounds(zones);
+  assert.ok(result.ok, JSON.stringify(result.issues));
+  assert.equal(new Set(zones.map(z => z.biome)).size, zones.length, 'each zone has its own biome');
+  for (const z of Object.values(ZONES)) assert.ok(BIOMES[z.biome], z.id);
 });
 
 test('every biome is readable: platforms, avatar and goal stand out', () => {

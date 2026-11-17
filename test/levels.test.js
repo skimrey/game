@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPlayer, stepPlayer } from '../src/physics.js';
-import { createLevel } from '../src/levelBuilder.js';
-import { levels, GENERATED_CAMPAIGN } from '../src/levels.js';
-import { auditLevel, analyzeJump, replaySolution, ticksToLand, dashReach, ENVELOPE, RULES } from '../src/levelAudit.js';
-import { generateLevel, difficultyKnobs, acceptGenerated } from '../src/levelGenerator.js';
+import { createPlayer, stepPlayer } from '../src/world/physics.js';
+import { createLevel } from '../src/levels/builder.js';
+import { levels, GENERATED_CAMPAIGN } from '../src/levels/index.js';
+import { auditLevel, analyzeJump, replaySolution, ticksToLand, dashReach, ENVELOPE, RULES } from '../src/levels/audit.js';
+import { generateLevel, difficultyKnobs, acceptGenerated } from '../src/levels/generator.js';
 
 const codes = audit => [...audit.errors, ...audit.warnings].map(e => e.code);
 

@@ -5,7 +5,7 @@ test('saved stats survive a page load (regression: the constructor used to overw
   const store = new Map();
   globalThis.localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
   try {
-    const { GameState } = await import('../src/state.js');
+    const { GameState } = await import('../src/engine/state.js');
     const first = new GameState();
     first.loadFromLocalStorage();
     first.updateLevelTime('First steps', 9.5);

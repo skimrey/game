@@ -2,7 +2,7 @@
 /**
  * Pick the generated half of the campaign: for each slot (difficulty) scan seeds ×
  * themes, and choose — greedily, slot by slot — the candidate that best keeps the
- * campaign fun by the campaign audit's rules (see src/campaignAudit.js):
+ * campaign fun by the campaign audit's rules (see src/levels/campaignAudit.js):
  *   - no theme twice in a tier (tiers 3 and 4 share a biome within the tier, so the
  *     layout has to tell levels apart), at most twice overall, and visibly distinct from
  *     every level so far; no name word used twice
@@ -15,11 +15,11 @@
  *
  *   node scripts/pick-campaign.mjs [--scan 8]     # seeds per (slot, theme)
  *
- * Prints the GENERATED_CAMPAIGN entries for src/levels.js.
+ * Prints the recipes for src/levels/campaign/ (one file per level; GENERATED_CAMPAIGN in src/levels/index.js).
  */
-import { generateLevel, THEME_NAMES } from '../src/levelGenerator.js';
-import { handcraftedLevels, TIER_ABILITIES } from '../src/levels.js';
-import { describeLevel, signatureDistance, CAMPAIGN_RULES } from '../src/campaignAudit.js';
+import { generateLevel, THEME_NAMES } from '../src/levels/generator.js';
+import { handcraftedLevels, TIER_ABILITIES } from '../src/levels/index.js';
+import { describeLevel, signatureDistance, CAMPAIGN_RULES } from '../src/levels/campaignAudit.js';
 
 const args = process.argv.slice(2);
 const SCAN = Number(args[args.indexOf('--scan') + 1]) || 8;

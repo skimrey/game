@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { levels, TIERS, handcraftedLevels } from '../src/levels.js';
-import { remixLevel, createRunPlanner, checkCandidate, baseCampaign, signatureOf, RUN_RULES } from '../src/runLevels.js';
-import { CAMPAIGN_SIGNATURES } from '../src/campaignSignatures.js';
-import { auditCampaign, describeLevel } from '../src/campaignAudit.js';
-import { auditLevel } from '../src/levelAudit.js';
-import { auditFun } from '../src/funAudit.js';
-import { auditEncounters } from '../src/encounterAudit.js';
+import { levels, TIERS, handcraftedLevels } from '../src/levels/index.js';
+import { remixLevel, createRunPlanner, checkCandidate, baseCampaign, signatureOf, RUN_RULES } from '../src/levels/runLevels.js';
+import { CAMPAIGN_SIGNATURES } from '../src/levels/campaignSignatures.js';
+import { auditCampaign, describeLevel } from '../src/levels/campaignAudit.js';
+import { auditLevel } from '../src/levels/audit.js';
+import { auditFun } from '../src/levels/funAudit.js';
+import { auditEncounters } from '../src/levels/encounterAudit.js';
 
 const base = baseCampaign().map(s => signatureOf(describeLevel(s.level)));
 

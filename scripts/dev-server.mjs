@@ -39,7 +39,7 @@ const option = (name, fallback) => {
   return i === -1 || args[i + 1]?.startsWith('--') ? fallback : args[i + 1];
 };
 const PORT = Number(option('port', 8000));
-const QUALITY = option('quality', null);   // 'test' | 'normal' (see src/quality.js)
+const QUALITY = option('quality', null);   // 'test' | 'normal' (see src/engine/quality.js)
 const PAGE = (() => {
   const page = option('open', 'index.html');
   if (!QUALITY) return page;

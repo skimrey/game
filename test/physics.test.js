@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPlayer, stepPlayer, PLAYER } from '../src/physics.js';
-import { levels } from '../src/levels.js';
+import { createPlayer, stepPlayer, PLAYER } from '../src/world/physics.js';
+import { levels } from '../src/levels/index.js';
 
 const dt = 1 / 120;
 const ground = { x: 0, y: 0, z: 0, width: 10, height: 1, depth: 10 };

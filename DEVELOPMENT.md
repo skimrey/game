@@ -6,19 +6,10 @@ This game uses a modular, component-based architecture designed for extensibilit
 
 ### Module Dependencies
 
-```
-main.js (coordinator)
-├── levels.js (data)
-├── physics.js (core logic)
-├── renderer.js (display)
-├── input.js (user interaction)
-├── audio.js (sound)
-├── particles.js (effects)
-├── state.js (persistence)
-├── config.js (constants)
-├── performance.js (monitoring)
-└── math.js (utilities)
-```
+The code is grouped by layer — `app/` (the running game) on top of `engine/`, `world/`, `levels/`,
+`characters/`, `games/`, `progression/`, `town/`, `cards/`, `ui/`, `audio/`. The full map and the
+"how to add…" recipes are in [STRUCTURE.md](STRUCTURE.md). (The examples below are from the
+original template and still show the general pattern: a module with a small API, wired in `app/`.)
 
 **Key Principle**: Modules are loosely coupled. Each module can be understood independently.
 
@@ -61,7 +52,7 @@ export class PowerupSystem {
 export const powerupSystem = new PowerupSystem();
 ```
 
-2. **Import in `src/main.js`:**
+2. **Import in `src/app/boot.js`:**
 
 ```javascript
 import { powerupSystem } from './powerups.js';
@@ -74,7 +65,7 @@ if (powerup === 'speed-boost') {
 powerupSystem.update(step);
 ```
 
-3. **Render in `src/renderer.js`:**
+3. **Render in `src/engine/renderer.js`:**
 
 ```javascript
 return (level, player, particles = [], powerups = []) => {
@@ -89,7 +80,7 @@ return (level, player, particles = [], powerups = []) => {
 
 ### Custom Player Movement
 
-Modify `src/physics.js`:
+Modify `src/world/physics.js`:
 
 ```javascript
 export function applyMovementModifier(player, modifier) {
@@ -101,7 +92,7 @@ export function applyMovementModifier(player, modifier) {
 
 ## Creating New Level Types
 
-Use helpers in `src/levelBuilder.js`:
+Use helpers in `src/levels/builder.js`:
 
 ```javascript
 // Add to LevelBuilder class:
@@ -115,7 +106,7 @@ addBridgeSequence(x, y, z, length = 10, width = 2) {
 
 ## Performance Optimization Tips
 
-1. **Reduce Particle Count**: In `src/main.js`:
+1. **Reduce Particle Count**: In `src/app/boot.js`:
    ```javascript
    particleSystem.emit(x, y, z, { count: 5 }); // Instead of 20
    ```
@@ -132,7 +123,7 @@ addBridgeSequence(x, y, z, length = 10, width = 2) {
 
 ### Enable Debug Mode
 
-In `src/config.js`:
+In `src/engine/config.js`:
 ```javascript
 DEBUG_MODE: true,
 SHOW_COLLISION_BOXES: true,
@@ -142,15 +133,15 @@ SHOW_PERFORMANCE_STATS: true,
 ### Log Game State
 
 ```javascript
-import { gameState } from './state.js';
+import { gameState } from './engine/state.js';
 console.log(gameState.stats);
 ```
 
 ### Test Physics Directly
 
 ```javascript
-import { createPlayer, stepPlayer } from './physics.js';
-import { levels } from './levels.js';
+import { createPlayer, stepPlayer } from './world/physics.js';
+import { levels } from './levels/index.js';
 
 const player = createPlayer(levels[0].spawn);
 const result = stepPlayer(player, levels[0], { left: false, right: true, forward: false, back: false, jump: false }, 1/120);
@@ -196,28 +187,27 @@ npm test
 
 ### Add a new level
 ```javascript
-// In src/levels.js
+// In src/levels/index.js
 createLevel('Challenge').setSpawn(...).addPlatform(...).build()
 ```
 
 ### Change player speed
 ```javascript
-// In src/physics.js or src/config.js
+// In src/world/physics.js or src/engine/config.js
 PLAYER_SPEED: 7
 ```
 
 ### Adjust difficulty
 ```javascript
-// In src/physics.js
+// In src/world/physics.js
 GRAVITY: 25 // Increase for more challenge
 PLAYER_JUMP_SPEED: 10 // Increase for more control
 ```
 
 ### Add sound to a level
 ```javascript
-// In src/main.js
-audioManager.loadSound('level-' + levelName, `./assets/audio/music/${levelName}.mp3`);
-audioManager.play('level-' + levelName, { music: true });
+// In src/app/boot.js
+sound.level(zone);   // each zone has its own generated tune (src/audio/compose.js)
 ```
 
 ## File Size Reference

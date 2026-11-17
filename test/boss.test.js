@@ -1,30 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeBoss, checkBoss, bossStats, gameDifficulty, BOSS_RULES } from '../src/bosses.js';
-import { MODES, CAPSTONES, BOSS_GAMES, CHECKPOINT_GAMES, TRAVEL_GAMES, TRAVEL_ROUTES, rolesOf, createBattleGame, playBoss, simulate } from '../src/battle/index.js';
-import { planEncounters, gameCounts, encounterList, ENCOUNTER_RULES } from '../src/encounters.js';
-import { starRating, starsText } from '../src/rating.js';
-import { ECHO, gaugeMarker } from '../src/battle/echo.js';
-import { TENNIS, predictX } from '../src/battle/tennis.js';
-import { RUNNER } from '../src/battle/runner.js';
-import { QUICKDRAW } from '../src/battle/quickdraw.js';
-import { SLED } from '../src/battle/sled.js';
-import { STARBEAT } from '../src/battle/starbeat.js';
-import { UNLOCKABLES, DEFAULT_CHARACTERS, STYLE_OPTIONS, createCharacterStore, randomCharacter, isUnlockable, RARITIES, DROP_TABLE } from '../src/character.js';
-import { TRAIL_STYLES, createTrailEmitter } from '../src/trails.js';
-import { itemParts } from '../src/avatar.js';
-import { gemParts, gemColor } from '../src/gem.js';
-import { TIERS, levels } from '../src/levels.js';
-import { placeArcade, touchesArcade, arcadeBoxes } from '../src/arcade.js';
-import { auditLevel } from '../src/levelAudit.js';
-import { createSession } from '../src/session.js';
-import { mulberry32 } from '../src/levelGenerator.js';
+import { makeBoss, checkBoss, bossStats, gameDifficulty, BOSS_RULES } from '../src/progression/bosses.js';
+import { MODES, CAPSTONES, BOSS_GAMES, CHECKPOINT_GAMES, TRAVEL_GAMES, TRAVEL_ROUTES, rolesOf, createBattleGame, playBoss, simulate } from '../src/games/index.js';
+import { planEncounters, gameCounts, encounterList, ENCOUNTER_RULES } from '../src/progression/encounters.js';
+import { planZones, ZONE_IDS, CLASSIC_ZONES, travelVehicles } from '../src/world/zones.js';
+import { starRating, starsText } from '../src/progression/rating.js';
+import { ECHO, gaugeMarker } from '../src/games/echo/rules.js';
+import { TENNIS, predictX } from '../src/games/tennis/rules.js';
+import { RUNNER } from '../src/games/runner/rules.js';
+import { QUICKDRAW } from '../src/games/quickdraw/rules.js';
+import { SLED } from '../src/games/sled/rules.js';
+import { STARBEAT } from '../src/games/starbeat/rules.js';
+import { UNLOCKABLES, DEFAULT_CHARACTERS, STYLE_OPTIONS, createCharacterStore, randomCharacter, isUnlockable, RARITIES, DROP_TABLE } from '../src/characters/character.js';
+import { TRAIL_STYLES, createTrailEmitter } from '../src/characters/trails.js';
+import { itemParts } from '../src/characters/avatar.js';
+import { gemParts, gemColor } from '../src/world/gem.js';
+import { TIERS, levels } from '../src/levels/index.js';
+import { placeArcade, touchesArcade, arcadeBoxes } from '../src/world/arcade.js';
+import { auditLevel } from '../src/levels/audit.js';
+import { createSession } from '../src/world/session.js';
+import { mulberry32 } from '../src/levels/generator.js';
 
 const DT = 1 / 120;
 const TIER_OF = TIERS.flatMap(t => t.levels.map((_, i) => ({ tier: t.id, slot: i, capstone: i === t.levels.length - 1 })));
 const step = (g, seconds) => { for (let t = 0; t < seconds; t += DT) { g.step(DT); } };
 
 const plan = runSeed => planEncounters(runSeed, TIER_OF);
+const zonedSlots = zones => TIERS.flatMap((t, k) => t.levels.map((_, i) => ({ tier: t.id, zone: zones[k], slot: i, capstone: i === t.levels.length - 1 })));
 const runBossesPlanned = runSeed => plan(runSeed).map((e, index) => makeBoss({ runSeed, index, count: TIER_OF.length, ...TIER_OF[index], mode: e.boss.mode, iteration: e.boss.iteration }));
 
 test('a new set of bosses every run: generated names, monsters and numbers, unique within a run', () => {
@@ -40,41 +42,56 @@ test('a new set of bosses every run: generated names, monsters and numbers, uniq
 
 test('maximum variety: no game twice in a run, capstones in place, terrain fits, every game turns up across runs', () => {
   const bossModes = new Set(), cpModes = new Set(), travelModes = new Set();
-  const orders = new Set();
-  for (let runSeed = 1; runSeed <= 60; runSeed++) {
-    const p = plan(runSeed);
+  const orders = new Set(), journeys = new Set();
+  for (let runSeed = 1; runSeed <= 80; runSeed++) {
+    const zones = planZones(runSeed);
+    journeys.add(zones.join());
+    const slots = zonedSlots(zones);
+    const p = planEncounters(runSeed, slots);
     const list = encounterList(p);
     const counts = gameCounts(p);
     for (const [mode, n] of Object.entries(counts)) assert.equal(n, 1, `run ${runSeed}: ${mode} ×${n}`);
-    assert.equal(list.length, 21, 'six checkpoints, twelve bosses, three journeys');
+    assert.equal(list.length, 19, 'four checkpoints (one a stage), twelve bosses, three journeys');
     assert.equal(Object.keys(counts).length, list.length, 'every encounter a different game');
     orders.add(list.map(e => e.mode).join());
-    TIER_OF.forEach((t, i) => { if (t.capstone) assert.equal(p[i].boss.mode, CAPSTONES[t.tier]); });
-    // a capstone game never turns up anywhere but its capstone
-    list.forEach(e => { const tier = Object.keys(CAPSTONES).find(k => CAPSTONES[k] === e.mode); if (tier) assert.ok(TIER_OF[e.level].tier === tier && TIER_OF[e.level].capstone); });
-    // terrain: the sled in the snow, the lander under the stars, a vehicle for every crossing
+    // each stage's capstone is the capstone of the zone it's played in
+    slots.forEach((t, i) => { if (t.capstone) assert.equal(p[i].boss.mode, CAPSTONES[t.zone]); });
+    // a capstone game never turns up anywhere but its zone's capstone
+    list.forEach(e => { const zone = Object.keys(CAPSTONES).find(k => CAPSTONES[k] === e.mode); if (zone) assert.ok(slots[e.level].zone === zone && slots[e.level].capstone); });
+    // terrain: the sled in the snow, the lander under the stars, a vehicle that suits every crossing
     list.forEach(e => {
-      if (e.mode === 'lander') assert.equal(TIER_OF[e.level].tier, 'starlit');
+      if (e.mode === 'lander') assert.equal(slots[e.level].zone, 'starlit');
       assert.ok(rolesOf(e.mode).includes(e.role), `${e.mode} as ${e.role}`);
     });
     const trips = p.filter(e => e.travel).map(e => e.travel);
-    assert.deepEqual(trips.map(t => `${t.from}>${t.to}`), TRAVEL_ROUTES.map(r => `${r.from}>${r.to}`));
-    trips.forEach((t, i) => assert.ok(TRAVEL_ROUTES[i].vehicles.includes(t.mode)));
+    assert.deepEqual(trips.map(t => `${t.from}>${t.to}`), zones.slice(1).map((z, i) => `${zones[i]}>${z}`));
+    trips.forEach(t => assert.ok(travelVehicles(t.from, t.to).includes(t.mode), `${t.mode} from ${t.from} to ${t.to}`));
     assert.ok(trips.filter(t => t.mode === 'plane').length <= 1, 'the plane at most once');
     assert.equal(p.filter(e => e.checkpoint).length, ENCOUNTER_RULES.checkpointLevels.length);
     assert.equal(p[0].checkpoint, null, 'the tutorial level has no arcade');
     // later encounters are harder, whatever the game (first meetings included)
-    const ds = list.map(e => e.difficulty - (TIER_OF[e.level].capstone && e.role === 'boss' ? ENCOUNTER_RULES.capstoneBonus : 0));
+    const ds = list.map(e => e.difficulty - (slots[e.level].capstone && e.role === 'boss' ? ENCOUNTER_RULES.capstoneBonus : 0));
     for (let i = 1; i < ds.length; i++) assert.ok(ds[i] > ds[i - 1], `run ${runSeed}: encounter ${i} not harder`);
     assert.ok(ds[0] <= 0.1 && ds.at(-1) >= 0.9);
     p.forEach(e => { bossModes.add(e.boss.mode); if (e.checkpoint) cpModes.add(e.checkpoint.mode); if (e.travel) travelModes.add(e.travel.mode); });
   }
-  assert.ok(orders.size >= 55, `${orders.size} different orders in 60 runs`);
+  assert.ok(journeys.size >= 30, `${journeys.size} different journeys in 80 runs`);
+  assert.ok(orders.size >= 75, `${orders.size} different orders in 80 runs`);
   assert.deepEqual([...bossModes].sort(), [...BOSS_GAMES].sort(), 'every boss game turns up');
-  assert.deepEqual([...cpModes].sort(), [...CHECKPOINT_GAMES].sort());
+  // (four checkpoints a run: the checkpoint-only games fill them; games that can be either go where they're needed)
+  assert.deepEqual([...cpModes].filter(m => rolesOf(m).length === 1).sort(), CHECKPOINT_GAMES.filter(m => rolesOf(m).length === 1).sort(), 'every checkpoint game turns up');
+  assert.ok([...cpModes].every(m => CHECKPOINT_GAMES.includes(m)));
   assert.deepEqual([...travelModes].sort(), [...TRAVEL_GAMES].sort());
-  assert.deepEqual(Object.values(CAPSTONES).sort(), ['echo', 'invaders', 'quickdraw', 'sled']);
-  assert.ok(Object.keys(MODES).length > 21, 'more games than encounters: some wait for the next run');
+  assert.equal(new Set(Object.values(CAPSTONES)).size, ZONE_IDS.length, 'every zone has its own capstone');
+  assert.ok(Object.keys(MODES).length > 19, 'more games than encounters: some wait for the next run');
+});
+
+test('the hand-written campaign (run 0) keeps the classic journey and its crossings', () => {
+  const p = plan(1);
+  TIER_OF.forEach((t, i) => { if (t.capstone) assert.equal(p[i].boss.mode, CAPSTONES[t.tier]); });
+  assert.deepEqual(planZones(0), CLASSIC_ZONES);
+  assert.deepEqual(p.filter(e => e.travel).map(e => `${e.travel.from}>${e.travel.to}`), TRAVEL_ROUTES.map(r => `${r.from}>${r.to}`));
+  assert.deepEqual(Object.fromEntries(CLASSIC_ZONES.map(z => [z, CAPSTONES[z]])), { meadow: 'echo', canyon: 'quickdraw', alpine: 'sled', starlit: 'invaders' });
 });
 
 test('the star rating counts the games beaten', () => {

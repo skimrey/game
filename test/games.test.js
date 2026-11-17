@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bossStats } from '../src/bosses.js';
-import { MODES, rolesOf, TRAVEL_GAMES, TRAVEL_ROUTES } from '../src/battle/index.js';
-import { BREAKOUT } from '../src/battle/breakout.js';
-import { WHACK } from '../src/battle/whack.js';
-import { FISHING } from '../src/battle/fishing.js';
-import { FROGGER } from '../src/battle/frogger.js';
-import { MINECART } from '../src/battle/minecart.js';
-import { riverAt } from '../src/battle/raft.js';
+import { bossStats } from '../src/progression/bosses.js';
+import { MODES, rolesOf, TRAVEL_GAMES, TRAVEL_ROUTES } from '../src/games/index.js';
+import { BREAKOUT } from '../src/games/breakout/rules.js';
+import { WHACK } from '../src/games/whack/rules.js';
+import { FISHING } from '../src/games/fishing/rules.js';
+import { FROGGER } from '../src/games/frogger/rules.js';
+import { MINECART } from '../src/games/minecart/rules.js';
+import { riverAt } from '../src/games/raft/rules.js';
 
 const DT = 1 / 120;
 const make = (mode, d = 0.3, kind = rolesOf(mode)[0], seed = 1) => MODES[mode].create({ mode, kind, ...bossStats(mode, d, () => 0.5, 0, 0, kind) }, { seed });

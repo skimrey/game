@@ -8,9 +8,10 @@ Pillow is optional and enables the rendered-pixel checks).
 1. Texture swatches: every material's painted top texture matches the swatch the
    DOM-free visual audit uses (textures.html, ΔE ≤ 8).
 2. Every page loads without console errors (game, playground, level lab, gallery).
-3. Each difficulty tier is rendered in the real game; screenshots are saved and the
-   *rendered* sky band and below-course backdrop are compared: every pair of tiers
-   must differ clearly (ΔE ≥ 15) — i.e. each tier really has a unique background.
+3. Every zone (zones.js — a run visits four of the eight) is rendered in the real game;
+   screenshots are saved and the *rendered* sky band and below-course backdrop are
+   compared: every pair of zones must differ clearly (ΔE ≥ 15) — i.e. each zone really
+   has a unique background. The town square is loaded too.
 
 Exits non-zero on any failure.
 """
@@ -27,7 +28,7 @@ import time
 from playwright.sync_api import sync_playwright
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TIER_FIRST_LEVEL = {"meadow": 1, "canyon": 4, "alpine": 7, "starlit": 10}
+ZONES = ["meadow", "lagoon", "canyon", "grove", "alpine", "volcano", "crystal", "starlit"]
 MIN_RENDERED_DELTA_E = 15
 
 
@@ -97,15 +98,15 @@ def main():
                 failures.append(f"texture swatch mismatch: {r['material']} ΔE {r['deltaE']:.1f}")
 
         # 2. pages load cleanly
-        for path in ["playground.html", "levels.html?level=6&mode=bot"]:
+        for path in ["playground.html", "playground.html?arena=town", "levels.html?level=6&mode=bot", "index.html?menu=0"]:
             page.goto(f"{base}/{path}")
-            time.sleep(2)
-        # 3. tiers in the real game
+            time.sleep(2.5)
+        # 3. every zone in the real game (level 1, played in that zone)
         samples = {}
-        for tier, level in TIER_FIRST_LEVEL.items():
-            page.goto(f"{base}/index.html?level={level}&menu=0")   # skip the character screen
+        for tier in ZONES:
+            page.goto(f"{base}/index.html?level=1&menu=0&zones={','.join([tier] * 4)}")   # skip the character screen and the town
             time.sleep(4.5)  # let the tier banner fade out
-            path = os.path.join(args.out, f"tier-{level:02d}-{tier}.png")
+            path = os.path.join(args.out, f"zone-{tier}.png")
             page.screenshot(path=path)
             status = page.evaluate("document.getElementById('status').textContent")
             print(f"rendered {tier:8} → {path}  ({status})")

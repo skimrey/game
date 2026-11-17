@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveQuality, PRESETS, describeQuality } from '../src/quality.js';
-import { coveredSides, visibleFaces, bakeBoxes, frustumPlanes, boxInFrustum, detailDistance, FLOATS_PER_VERTEX } from '../src/renderer.js';
-import { buildScenery } from '../src/scenery.js';
-import { BIOMES } from '../src/biomes.js';
+import { resolveQuality, PRESETS, describeQuality } from '../src/engine/quality.js';
+import { coveredSides, visibleFaces, bakeBoxes, frustumPlanes, boxInFrustum, detailDistance, FLOATS_PER_VERTEX } from '../src/engine/renderer.js';
+import { buildScenery } from '../src/world/scenery.js';
+import { BIOMES } from '../src/world/biomes.js';
 
 const params = query => new URLSearchParams(query);
 

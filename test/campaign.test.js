@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { levels, TIERS, handcraftedLevels, generatedLevels, GENERATED_CAMPAIGN } from '../src/levels.js';
-import { auditCampaign, describeLevel, signatureDistance, CAMPAIGN_RULES } from '../src/campaignAudit.js';
-import { THEMES } from '../src/levelGenerator.js';
+import { levels, TIERS, handcraftedLevels, generatedLevels, GENERATED_CAMPAIGN } from '../src/levels/index.js';
+import { auditCampaign, describeLevel, signatureDistance, CAMPAIGN_RULES } from '../src/levels/campaignAudit.js';
+import { THEMES } from '../src/levels/generator.js';
 
 const described = levels.map(l => describeLevel(l));
 const codes = result => result.issues.map(i => i.code);

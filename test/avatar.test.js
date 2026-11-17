@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPlayer, stepPlayer, PLAYER } from '../src/physics.js';
-import { createAvatar, computeShadow, AVATAR_PALETTES } from '../src/avatar.js';
-import { transformPoint } from '../src/mat4.js';
+import { createPlayer, stepPlayer, PLAYER } from '../src/world/physics.js';
+import { createAvatar, computeShadow, AVATAR_PALETTES } from '../src/characters/avatar.js';
+import { transformPoint } from '../src/engine/mat4.js';
 
 const dt = 1 / 120;
 const ground = { x: 0, y: 0, z: 0, width: 40, height: 1, depth: 40 };

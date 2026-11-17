@@ -11,15 +11,15 @@
  * to the goal, and regenerating the same seed yields an identical level.
  * Exits non-zero on any violation so it can gate CI.
  */
-import { levels, TIERS, tierOf, tierForDifficulty } from '../src/levels.js';
-import { BIOMES, BIOME_LIST } from '../src/biomes.js';
-import { buildScenery, auditScenery } from '../src/scenery.js';
-import { auditBiome, auditTierBackgrounds } from '../src/visualAudit.js';
-import { auditFun, designDifficulty, funRequirements } from '../src/funAudit.js';
-import { auditCampaign, describeLevel } from '../src/campaignAudit.js';
-import { auditEncounters } from '../src/encounterAudit.js';
-import { auditLevel, formatAudit, replaySolution, ENVELOPE } from '../src/levelAudit.js';
-import { generateLevel, acceptGenerated, generatedRejections } from '../src/levelGenerator.js';
+import { levels, TIERS, tierOf, tierForDifficulty } from '../src/levels/index.js';
+import { BIOMES, BIOME_LIST } from '../src/world/biomes.js';
+import { buildScenery, auditScenery } from '../src/world/scenery.js';
+import { auditBiome, auditTierBackgrounds } from '../src/levels/visualAudit.js';
+import { auditFun, designDifficulty, funRequirements } from '../src/levels/funAudit.js';
+import { auditCampaign, describeLevel } from '../src/levels/campaignAudit.js';
+import { auditEncounters } from '../src/levels/encounterAudit.js';
+import { auditLevel, formatAudit, replaySolution, ENVELOPE } from '../src/levels/audit.js';
+import { generateLevel, acceptGenerated, generatedRejections } from '../src/levels/generator.js';
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {

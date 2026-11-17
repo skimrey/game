@@ -10,7 +10,7 @@ check (`npm test`, `npm run levels:report`, the Level Lab):
 
 ## Findings on the original campaign
 
-Measured with the campaign audit (`src/campaignAudit.js`) on the original 12 levels:
+Measured with the campaign audit (`src/levels/campaignAudit.js`) on the original 12 levels:
 
 | Question | Finding |
 |---|---|
@@ -52,7 +52,7 @@ Measured with the campaign audit (`src/campaignAudit.js`) on the original 12 lev
   lead anywhere?".
 - New fun requirements by difficulty: a required dash from 0.15 (two from 0.6), a long drop from
   0.2, a shortcut from 0.15; dead ends capped at 4.
-- **The campaign audit** (`src/campaignAudit.js`): `TOO_SIMILAR`, `CHALLENGE_DROP`, `FLAT_TIERS`,
+- **The campaign audit** (`src/levels/campaignAudit.js`): `TOO_SIMILAR`, `CHALLENGE_DROP`, `FLAT_TIERS`,
   `LENGTH_CLIFF`, `MOVE_UNUSED`, `MOVE_DROPPED`, `HARSH_INTRODUCTION`, `UNTAUGHT`.
 
 ### The hand-made levels (tiers 1–2)
@@ -86,7 +86,7 @@ Measured with the campaign audit (`src/campaignAudit.js`) on the original 12 lev
 ## One new technique per region
 
 Each region adds a movement technique and keeps the earlier ones (`TIER_ABILITIES` in
-`src/levels.js`; `level.abilities` gates them in the physics):
+`src/levels/index.js`; `level.abilities` gates them in the physics):
 
 | Region | New technique | How it's taught | How it's needed / mixed |
 |---|---|---|---|
@@ -95,11 +95,11 @@ Each region adds a movement technique and keeps the earlier ones (`TIER_ABILITIE
 | Alpine Dusk | **glide** (hold jump while falling) | the region's first level opens with a hint | glide gaps: a long way across and down (6–10 across, 2–5 down) that only a glide makes |
 | Starlit Ruins | **double jump** (jump again in the air) | the region's first level opens with a hint | double walls: a ledge 1.8–2.5 up, too tall for one jump; deeper dead ends (judged with the double jump) |
 
-The audits know every move: `moveReach(kind, dh)` / `movePeak(kind)` in `src/levelAudit.js` give each
+The audits know every move: `moveReach(kind, dh)` / `movePeak(kind)` in `src/levels/audit.js` give each
 move's horizontal reach at a height change and its peak; when plain jumps can't make a gap the route
 planner uses the gentlest special move the level allows (dash, then glide, then double jump; bounce
 pads are part of the terrain), and the bot proves it in the real physics, timing included. The
-generator (`src/levelGenerator.js`) has a pattern per technique — **glide gaps**, **double walls**
+generator (`src/levels/generator.js`) has a pattern per technique — **glide gaps**, **double walls**
 and **spring pads** (a pad, then a ledge high above it that only its bounce reaches) — and schedules the
 techniques it is given (`generateLevel({ abilities, techniques })`) so every level of a region uses
 its technique at least once and the last region mixes them. False paths can now go deeper when the
@@ -131,7 +131,7 @@ Every campaign level passes the audits with its region's abilities; the generate
 ## Goal and reward
 
 Every level ends at a floating gem instead of a flag. Collecting it starts that level's boss battle
-(`src/bosses.js`: generated per run, getting harder through the campaign; the last level of each
+(`src/progression/bosses.js`: generated per run, getting harder through the campaign; the last level of each
 region ends with that region's capstone mini-game, and a travel level — raft, mine cart, snowmobile
 or biplane — takes you on to the next region). No mini-game repeats within a run, and the star
 rating at the end counts the games beaten (see the README). Winning unlocks a random clothing item. The level
@@ -139,14 +139,14 @@ audits treat the gem position exactly like the old goal.
 
 ## Arcade checkpoints
 
-Levels 2, 4, 6, 8, 9 and 11 (in every run) get an arcade cabinet halfway: `src/arcade.js` puts it on
+Levels 2, 4, 6, 8, 9 and 11 (in every run) get an arcade cabinet halfway: `src/world/arcade.js` puts it on
 the middle-most platform of the audit's verified route that is roomy (at least 1.8 m both ways), has
 no ground enemy and isn't the start or the goal. It is decoration — not solid — so it never changes
 what the audits proved; winning its mini-game only moves the restart point there.
 
 ## Runs: new layouts every time, within the rules
 
-Each run replaces the levels above with new ones (`src/runLevels.js`), and only if they keep what
+Each run replaces the levels above with new ones (`src/levels/runLevels.js`), and only if they keep what
 makes this campaign work:
 
 | Check | Why |

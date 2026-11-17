@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cast 3D</title>
+  <style>
+    body { margin: 0; padding: 20px; background: #14121f; color: #e9e4ff; font: 13px/1.4 system-ui, sans-serif; }
+    h1 { margin: 0 0 4px; font-size: 20px; }
+    p { margin: 0 0 12px; color: #a9a3c4; max-width: 1000px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card, 560px), 1fr)); gap: 10px; }
+    .card { padding: 6px; border-radius: 8px; background: #221e33; }
+    .card.odd { outline: 2px solid #f59e0b; }
+    .pair { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
+    .pair canvas { width: 100%; display: block; border-radius: 5px; image-rendering: pixelated; }
+    .tags { font-size: 12px; color: #a9a3c4; margin-top: 4px; }
+    .score { float: right; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>Cast 3D — the people, as the game draws them</h1>
+  <p>Close-up and full figure from the game's WebGL renderer, beside the 2D dialog portrait. The number is the <em>weirdness</em> score (characters/npcs.js: face quirks weighted by how they look in 3D, plus a fantasy skin tone); over the budget is outlined.
+    <code>?people=N</code> town visit N's folk · <code>?seed=N</code> a batch of NPCs · <code>?parts=1</code> each face feature alone · <code>&amp;big=1</code> full-size pictures · <code>&amp;only=Name,Name</code> just those people.</p>
+  <div class="grid" id="grid"></div>
+  <script type="module" src="./src/tools/castSheet3d.js"></script>
+</body>
+</html>

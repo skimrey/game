@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Balance report — every mini-game, in every role, at easy / medium / hard settings,
- * played by human-like bots (battle/humanize.js: novice, average, expert) over several
+ * played by human-like bots (games/kit/humanize.js: novice, average, expert) over several
  * seeds. Prints win rates, how much of the clock a win takes and hearts left.
  *
  *   node scripts/balance-report.mjs [--seeds 8] [mode …]
@@ -10,8 +10,8 @@
  * hardest settings, an expert nearly always, a novice often at the easy ones (see
  * test/balance.test.js and BALANCE_RULES).
  */
-import { MODES, rolesOf } from '../src/battle/index.js';
-import { SKILLS, playHuman } from '../src/battle/humanize.js';
+import { MODES, rolesOf } from '../src/games/index.js';
+import { SKILLS, playHuman } from '../src/games/kit/humanize.js';
 
 const args = process.argv.slice(2);
 const SEEDS = Number(args[args.indexOf('--seeds') + 1]) || 8;

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MODES, rolesOf } from '../src/battle/index.js';
-import { humanize, SKILLS, BALANCE_RULES, playHuman } from '../src/battle/humanize.js';
-import { baseGame } from '../src/battle/common.js';
+import { MODES, rolesOf } from '../src/games/index.js';
+import { humanize, SKILLS, BALANCE_RULES, playHuman } from '../src/games/kit/humanize.js';
+import { baseGame } from '../src/games/kit/common.js';
 
 const SEEDS = [1, 2, 3];
 

@@ -27,70 +27,45 @@ open http://localhost:8000
 
 ```
 game/
-├── index.html              # Game window
-├── style.css               # UI styles
-├── package.json            # Project metadata
-│
-├── src/                    # Game source code
-│   ├── main.js             # Game loop and coordinator
-│   ├── physics.js          # Player movement and collisions
-│   ├── renderer.js         # WebGL rendering
-│   ├── levels.js           # Level definitions
-│   ├── config.js           # Configuration constants
-│   ├── input.js            # Keyboard and gamepad input
-│   ├── audio.js            # Sound effects framework
-│   ├── particles.js        # Visual effects system
-│   ├── state.js            # Game state and persistence
-│   ├── levelBuilder.js     # Level creation helpers
-│   ├── math.js             # Math utilities
-│   └── performance.js      # Performance monitoring
-│
-├── test/                   # Test suite
-│   └── physics.test.js     # Physics validation
-│
-├── assets/                 # Game assets
-│   ├── audio/              # Sound files (add yours here)
-│   │   ├── music/
-│   │   └── sfx/
-│   ├── textures/           # Texture files
-│   ├── models/             # 3D models
-│   └── shaders/            # GLSL shaders
-│
-├── README.md               # User guide
-├── ARCHITECTURE.md         # System design
-├── DEVELOPMENT.md          # Developer guide
-├── IMPROVEMENTS.md         # What's new
-└── .gitignore              # Git ignore rules
+├── index.html · playground.html · levels.html · textures.html   the pages
+├── style.css · playground.css · levels.css
+├── src/          main.js → app/ (the running game) · engine/ · world/ · levels/ · characters/
+│                 games/ (28 mini-games) · progression/ · town/ · cards/ (Riftcards) · ui/ · audio/ · tools/
+├── test/         one test file per area (node --test)
+├── scripts/      dev server, reports, previews
+└── perf/         performance pages
 ```
+
+Every file and how to add things: [STRUCTURE.md](STRUCTURE.md).
 
 ## Common Tasks
 
 ### Add a Sound Effect
 
 ```javascript
-// In src/main.js, near top:
-audioManager.loadSound('jump', './assets/audio/sfx/jump.mp3');
-
-// When you want to play it:
-audioManager.play('jump');
+// 1. In src/audio/sfx.js, add a recipe:  boing: (v, t, b) => v.sweep(t, 200, 900, 0.2, 0.1, b, 'square'),
+// 2. Wherever it happens:
+import { sound } from '../audio/music.js';
+sound.fx('boing');
 ```
 
 ### Create a New Level
 
 ```javascript
-// In src/levels.js, add to levels array:
-createLevel('My Challenge')
+// A new file src/levels/campaign/13-my-challenge.js (then list it in src/levels/index.js):
+import { createLevel } from '../builder.js';
+export default createLevel('My Challenge')
   .setSpawn(0, 1, 0)
   .addPlatform(0, 0, 0, 6, 1, 6)      // x, y, z, width, height, depth
   .addPlatform(3, 0.5, 6, 4, 1, 3)
   .setGoal(3, 1, 14)
-  .build(),
+  .build();
 ```
 
 ### Change Difficulty
 
 ```javascript
-// In src/config.js:
+// In src/engine/config.js:
 GRAVITY: 25,              // Increase for harder
 PLAYER_JUMP_SPEED: 10,    // Increase for more control
 PLAYER_SPEED: 6           // Increase for faster movement
@@ -99,7 +74,7 @@ PLAYER_SPEED: 6           // Increase for faster movement
 ### Add Particles to an Event
 
 ```javascript
-// In src/main.js, in the result === 'goal' block:
+// In src/app/boot.js, in the result === 'goal' block:
 particleSystem.emit(goalX, goalY, goalZ, {
   count: 30,
   speed: 10,
@@ -111,7 +86,7 @@ particleSystem.emit(goalX, goalY, goalZ, {
 ### Show Performance Stats
 
 ```javascript
-// In src/config.js:
+// In src/engine/config.js:
 SHOW_PERFORMANCE_STATS: true
 ```
 
@@ -120,14 +95,14 @@ Then check browser console for FPS counter.
 ### Debug a Level
 
 ```javascript
-// In src/config.js:
+// In src/engine/config.js:
 DEBUG_MODE: true,
 SHOW_COLLISION_BOXES: true,
 ```
 
 ## Configuration Quick Reference
 
-### Physics (src/config.js)
+### Physics (src/engine/config.js)
 ```javascript
 GRAVITY: 20                 // Downward acceleration (m/s²)
 PLAYER_SPEED: 5            // Horizontal move speed
@@ -136,7 +111,7 @@ PLAYER_WIDTH: 0.4          // Player width (x-axis)
 PLAYER_HEIGHT: 1.5         // Player height (y-axis)
 ```
 
-### Camera (src/config.js)
+### Camera (src/engine/config.js)
 ```javascript
 CAMERA_FOV: Math.PI / 3    // Field of view angle
 CAMERA_HEIGHT_OFFSET: 7    // Height above player
@@ -144,7 +119,7 @@ CAMERA_DISTANCE_OFFSET: -12 // Distance behind player
 CAMERA_FORWARD_OFFSET: 5   // Forward look offset
 ```
 
-### Colors (src/config.js)
+### Colors (src/engine/config.js)
 ```javascript
 COLORS: {
   PLATFORM: [0.35, 0.65, 0.35],  // Green
@@ -218,19 +193,9 @@ npm test
 
 ## Module Dependencies
 
-```
-main.js imports:
-├── levels.js
-├── physics.js
-├── renderer.js
-├── input.js
-├── audio.js
-├── particles.js
-├── state.js
-├── config.js
-├── performance.js
-└── math.js
-```
+`src/main.js` → `app/boot.js` (shared state `G`, singletons) → the feature modules of `app/`
+(run, level, travel, quests, town, townCards, hero, testing, loop) → the layers below. See
+[STRUCTURE.md](STRUCTURE.md).
 
 ## Important Constants
 
@@ -254,7 +219,7 @@ main.js imports:
 
 ### Loading Audio
 ```javascript
-audioManager.loadSound('name', 'path/to/file.mp3');
+sound.fx('name');   // recipes in src/audio/sfx.js
 ```
 
 ### Creating Particles
@@ -297,7 +262,7 @@ createLevel('Name')
 - Ensure goal is reachable
 
 **Input not detected**
-- Check InputManager in src/input.js
+- Check InputManager in src/engine/input.js
 - Verify control scheme in config.js
 
 **Audio doesn't play**

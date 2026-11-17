@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPlayer, stepPlayer, ABILITIES, PLAYER } from '../src/physics.js';
-import { createLevel } from '../src/levelBuilder.js';
-import { TIERS, TIER_ABILITIES, levels } from '../src/levels.js';
-import { auditLevel, moveReach, movePeak, SPECIAL_MOVES, bestSpecial, DT } from '../src/levelAudit.js';
-import { describeLevel, TECHNIQUES } from '../src/campaignAudit.js';
-import { generateLevel, abilitiesForDifficulty } from '../src/levelGenerator.js';
+import { createPlayer, stepPlayer, ABILITIES, PLAYER } from '../src/world/physics.js';
+import { createLevel } from '../src/levels/builder.js';
+import { TIERS, TIER_ABILITIES, levels } from '../src/levels/index.js';
+import { auditLevel, moveReach, movePeak, SPECIAL_MOVES, bestSpecial, DT } from '../src/levels/audit.js';
+import { describeLevel, TECHNIQUES } from '../src/levels/campaignAudit.js';
+import { generateLevel, abilitiesForDifficulty } from '../src/levels/generator.js';
 
 const floor = (abilities, extra = []) => ({
   abilities,

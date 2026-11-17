@@ -10,7 +10,7 @@
        Its cost is the browser's fixed per-frame overhead (compositing etc.). -->
   <canvas id="c"></canvas>
   <script type="module">
-    import { createFpsMeter } from '../src/fpsMeter.js';
+    import { createFpsMeter } from '../src/engine/fpsMeter.js';
     const params = new URLSearchParams(location.search);
     const scale = Number(params.get('resolution') || 0.35);
     const canvas = document.getElementById('c');

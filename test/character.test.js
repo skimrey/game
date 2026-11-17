@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_CHARACTERS, STYLE_OPTIONS, COLOR_SLOTS, DRAFT_ID, MAX_SAVED, STORAGE_KEY,
   normalizeCharacter, randomCharacter, sameLook, hexToRgb, rgbToHex, createCharacterStore,
-} from '../src/character.js';
-import { createAvatar, lookFor } from '../src/avatar.js';
-import { projectParts } from '../src/portrait.js';
-import { createPlayer, stepPlayer, PLAYER } from '../src/physics.js';
-import { transformPoint } from '../src/mat4.js';
-import { mulberry32 } from '../src/levelGenerator.js';
+} from '../src/characters/character.js';
+import { createAvatar, lookFor } from '../src/characters/avatar.js';
+import { projectParts } from '../src/characters/portrait.js';
+import { createPlayer, stepPlayer, PLAYER } from '../src/world/physics.js';
+import { transformPoint } from '../src/engine/mat4.js';
+import { mulberry32 } from '../src/levels/generator.js';
 
 /** In-memory stand-in for localStorage. */
 function memoryStorage() {

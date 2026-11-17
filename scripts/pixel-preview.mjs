@@ -8,10 +8,10 @@
  */
 import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
-import { createSurface, blit, clear, rect, text, toRGBA } from '../src/pixel.js';
-import { buildScheme, heroBaseColors, bossBaseColors, minionBaseColors, packPalette, SLOT } from '../src/palette.js';
-import { paintHero } from '../src/heroSprite.js';
-import { DEFAULT_CHARACTERS, UNLOCKABLES, normalizeCharacter } from '../src/character.js';
+import { createSurface, blit, clear, rect, text, toRGBA } from '../src/engine/pixel.js';
+import { buildScheme, heroBaseColors, bossBaseColors, minionBaseColors, packPalette, SLOT } from '../src/engine/palette.js';
+import { paintHero } from '../src/characters/heroSprite.js';
+import { DEFAULT_CHARACTERS, UNLOCKABLES, normalizeCharacter } from '../src/characters/character.js';
 
 export function encodePNG(width, height, rgba) {
   const crcTable = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
@@ -91,7 +91,7 @@ function saveRows(out, rows, scale = 3) {
 }
 
 async function monsterSheet(out, seedArg) {
-  const { generateMonster, ROLES } = await import('../src/monsters.js');
+  const { generateMonster, ROLES } = await import('../src/characters/monsters.js');
   const base = Number(seedArg) || 1;
   const rows = [];
   for (const role of Object.keys(ROLES)) {
@@ -112,16 +112,17 @@ async function monsterSheet(out, seedArg) {
 }
 
 async function sceneSheet(out, seedArg) {
-  const { makeBoss } = await import('../src/bosses.js');
-  const { MODES, CAPSTONES } = await import('../src/battle/index.js');
-  const { createView, drawBattle, updateParticles } = await import('../src/battle/draw.js');
+  const { makeBoss } = await import('../src/progression/bosses.js');
+  const { MODES, CAPSTONES } = await import('../src/games/index.js');
+  const { createView, drawBattle, updateParticles } = await import('../src/games/kit/view.js');
   const runSeed = Number(seedArg) || 1;
   const design = DEFAULT_CHARACTERS[0];
   const only = process.argv[5] ? process.argv[5].split(',') : null;
   const plan = [['runner', 'meadow', 0, 4], ['echo', 'meadow', 2, 9], ['quickdraw', 'canyon', 5, 5], ['sled', 'alpine', 8, 6], ['starbeat', 'starlit', 11, 6], ['tennis', 'canyon', 4, 5],
     ['invaders', 'starlit', 11, 6], ['fireball', 'alpine', 7, 6], ['doodle', 'meadow', 1, 5], ['flappy', 'canyon', 3, 6], ['tetris', 'alpine', 7, 9], ['runner', 'starlit', 10, 7],
     ['breakout', 'canyon', 5, 8], ['cannon', 'canyon', 5, 5], ['whack', 'meadow', 2, 4], ['fishing', 'meadow', 2, 9], ['maze', 'starlit', 10, 6], ['frogger', 'canyon', 4, 5],
-    ['lander', 'starlit', 10, 8], ['raft', 'meadow', 2, 6], ['minecart', 'canyon', 5, 6], ['snowmobile', 'alpine', 8, 6], ['plane', 'alpine', 8, 6]].filter(([m]) => !only || only.includes(m));
+    ['lander', 'starlit', 10, 8], ['raft', 'meadow', 2, 6], ['minecart', 'canyon', 5, 6], ['snowmobile', 'alpine', 8, 6], ['plane', 'alpine', 8, 6],
+    ['parry', 'meadow', 6, 3.3], ['parry', 'volcano', 6, 4.1], ['bubble', 'lagoon', 5, 7], ['bomber', 'grove', 6, 7], ['lavaguard', 'volcano', 9, 7], ['shards', 'crystal', 10, 7]].filter(([m]) => MODES[m]).filter(([m]) => !only || only.includes(m));
   const rows = [];
   for (const [mode, tier, index, seconds] of plan) {
     const boss = makeBoss({ runSeed, index, tier, mode, check: false, iteration: mode === 'echo' ? 1 : 0, difficulty: 0.6 });
@@ -146,9 +147,11 @@ async function sceneSheet(out, seedArg) {
   saveRows(out, pairs, 2);
 }
 
-const [what = 'heroes', out = '/tmp/preview.png', arg] = process.argv.slice(2);
-if (what === 'heroes') heroSheet(out);
-else if (what === 'monsters') await monsterSheet(out, arg);
-else if (what === 'scenes') await sceneSheet(out, arg);
-else console.error('unknown sheet', what);
-console.log('wrote', out);
+if (import.meta.url === `file://${process.argv[1]}`) {                // run, not imported (scripts/cast-sheet.mjs borrows encodePNG)
+  const [what = 'heroes', out = '/tmp/preview.png', arg] = process.argv.slice(2);
+  if (what === 'heroes') heroSheet(out);
+  else if (what === 'monsters') await monsterSheet(out, arg);
+  else if (what === 'scenes') await sceneSheet(out, arg);
+  else console.error('unknown sheet', what);
+  console.log('wrote', out);
+}

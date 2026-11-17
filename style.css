@@ -51,6 +51,7 @@ p { margin: 0.3rem 0; }
   pointer-events: none;
   z-index: 4;
 }
+.health-hud[hidden] { display: none; }
 .health-hud .hearts { display: flex; gap: 4px; }
 .health-hud .heart svg { width: 26px; height: 24px; display: block; }
 .health-hud .heart.full svg path { fill: #ef4444; stroke: #fff; stroke-width: 1.5; }
@@ -213,9 +214,10 @@ body.in-menu .hud, body.in-menu .health-hud, body.in-menu .tier-banner { display
 /* --- Boss battle ----------------------------------------------------------- */
 .boss-screen { position: absolute; inset: 0; z-index: 8; background: #0b0716; display: flex; align-items: center; justify-content: center; }
 .boss-screen[hidden] { display: none; }
-.boss-canvas { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+.boss-canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }   /* sized by pixelFit.js: a whole-number scale */
 .boss-card {
   position: absolute;
+  z-index: 10;
   max-width: min(520px, 90vw);
   padding: 18px 22px;
   border-radius: 14px;
@@ -264,8 +266,10 @@ body.in-menu .hud, body.in-menu .health-hud, body.in-menu .tier-banner { display
 body.in-battle .hud, body.in-battle .health-hud, body.in-battle .tier-banner, body.in-battle .fps-badge,
 body.in-stage .hud, body.in-stage .health-hud, body.in-stage .tier-banner { display: none; }
 /* the 3D view is idle behind the 2D screens: don't make the browser composite it */
-body.in-battle #game, body.in-stage #game { visibility: hidden; }
-.reward-canvas { position: absolute; inset: 0; z-index: 6; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; background: #0b0716; }
+body.in-battle #game, body.in-stage #game, body.in-home #game { visibility: hidden; }
+body.in-stage main, body.in-home main { background: #0b0716; }
+body.in-home .hud, body.in-home .health-hud, body.in-home .tier-banner, body.in-home .fps-badge { display: none; }
+.reward-canvas { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; image-rendering: pixelated; background: #0b0716; }
 .reward-canvas[hidden] { display: none; }
 .boss-screen[data-mode="quickdraw"] .boss-canvas { cursor: none; }
 .boss-badge.round { background: #5ef0ff; }
@@ -329,3 +333,223 @@ body.in-battle .test-toggle, body.in-stage .test-toggle, body.in-menu .test-togg
 .test-game span { flex: 1; }
 .test-game button { width: 28px; padding: 4px 0; }
 .test-note { margin: 10px 0 0; color: #a89cc8; font-size: 11px; }
+.test-journeys { display: grid; gap: 4px; margin-top: 6px; }
+.test-journey span:first-child { flex: 1.4; }
+.test-journey .test-view { flex: 0 0 auto; margin-left: 8px; color: #fbbf24; font-size: 11px; }
+.test-label { align-self: center; color: #a89cc8; font-size: 12px; }
+.test-zone { border: 1px solid #4c3d7a; border-radius: 8px; background: #231a40; color: #fff; font: 600 12px system-ui, sans-serif; padding: 4px 6px; }
+
+/* Spell bar (battles): the hero's spells — keys 1–5 or click */
+.spell-bar { position: absolute; right: 10px; bottom: 10px; z-index: 9; display: flex; gap: 6px; align-items: stretch; padding: 5px 6px; border-radius: 10px; background: rgba(18, 12, 34, 0.82); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); }
+.spell-bar[hidden] { display: none; }
+.spell-bar .spell { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 62px; padding: 4px 6px 3px; border: 2px solid #5d4b99; border-radius: 8px; background: #231a42; color: #f4f0ff; font: 600 11px/1.1 system-ui, sans-serif; cursor: pointer; }
+.spell-bar .spell canvas { width: 32px; height: 32px; image-rendering: pixelated; }
+.spell-bar button.spell:hover:not(:disabled) { border-color: #ffd23f; }
+.spell-bar .spell.spent, .spell-bar .spell:disabled { opacity: 0.55; cursor: default; }
+.spell-bar .spell.passive { border-style: dashed; border-color: #3d3366; background: #1a1330; cursor: help; }
+.spell-key { position: absolute; top: 2px; left: 4px; padding: 0 4px; border-radius: 4px; background: #ffd23f; color: #1b1028; font-size: 10px; }
+.spell-charges { position: absolute; top: 2px; right: 4px; color: #ffd23f; font-size: 10px; }
+.spell-cooldown { position: absolute; inset: 0; display: grid; place-items: center; color: #fff8f0; font: 700 15px/1 system-ui, sans-serif; text-shadow: 0 1px 0 #000, 0 0 4px #000; background: rgba(11, 7, 22, 0.45); border-radius: inherit; pointer-events: none; }
+.spell-name { max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.health-hud .hud-spells { display: flex; align-items: center; gap: 3px; }
+.health-hud .hud-spells[hidden] { display: none; }
+.health-hud .hud-spells canvas { width: 20px; height: 20px; image-rendering: pixelated; }
+.health-hud .hud-class { padding: 1px 7px; border-radius: 999px; color: #1b1028; font: 800 10px/1.6 system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* --- NPC dialog (npcDialog.js) ---------------------------------------------- */
+.npc-dialog { position: absolute; left: 18px; bottom: 18px; z-index: 12; width: min(640px, 62vw, 94vw); max-height: 80vh; overflow: auto; padding: 16px 18px 14px; border-radius: 14px; background: rgba(15, 10, 30, 0.94); color: #f1e9ff; font: 15px/1.45 system-ui, sans-serif; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14), 0 14px 40px rgba(0, 0, 0, 0.55); }
+.npc-dialog[hidden] { display: none; }
+.npc-head { display: flex; align-items: center; gap: 14px; }
+.npc-portrait { width: 128px; height: 128px; image-rendering: pixelated; border-radius: 10px; box-shadow: 0 0 0 3px #3d2f6e; flex: none; }
+.npc-name { margin: 0; font-size: 1.35rem; color: #fff; }
+.npc-job { margin: 2px 0 0; color: #ff9de2; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; }
+.npc-text { margin: 12px 2px 10px; min-height: 3em; font-size: 16px; }
+.npc-extra:empty { display: none; }
+.npc-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.npc-buttons button, .npc-card { padding: 8px 14px; border: 2px solid #5d4b99; border-radius: 9px; background: #231a42; color: #f4f0ff; font: 600 14px/1.2 system-ui, sans-serif; cursor: pointer; }
+.npc-buttons button.primary { background: #ffd23f; border-color: #ffd23f; color: #1b1028; }
+.npc-buttons button:disabled { opacity: 0.45; cursor: default; }
+.npc-buttons button:focus-visible, .npc-card:focus-visible { outline: 3px solid #5ef0ff; outline-offset: 2px; }
+.npc-cards { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
+.npc-card { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 170px; padding: 10px; text-align: center; font-weight: 400; font-size: 13px; }
+.npc-card strong { font-size: 15px; color: #fff; }
+.npc-card canvas { width: 48px; height: 48px; image-rendering: pixelated; }
+.npc-card canvas.npc-item-art { width: 64px; height: 64px; image-rendering: auto; border-radius: 8px; }
+button.npc-card:hover { border-color: #ffd23f; }
+.npc-card-kind { color: #5ef0ff; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+.npc-rarity { font-weight: 700; font-size: 12px; }
+.npc-note { margin: 0 0 6px; color: #c4b5fd; font-size: 12px; }
+.npc-trade { display: grid; grid-template-columns: auto auto 1fr; gap: 12px; align-items: center; margin-bottom: 10px; }
+.npc-trade .npc-cards { justify-content: flex-start; }
+.npc-trade .npc-card { width: 130px; }
+.npc-swap { font-size: 28px; color: #ffd23f; }
+.npc-prompt { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); z-index: 5; padding: 6px 14px; border-radius: 999px; background: rgba(15, 10, 30, 0.82); color: #fff; font: 600 15px/1.3 system-ui, sans-serif; pointer-events: none; }
+.npc-prompt kbd { padding: 1px 7px; border-radius: 5px; background: #ffd23f; color: #1b1028; font: 800 13px/1.4 system-ui, sans-serif; }
+.npc-prompt[hidden] { display: none; }
+
+/* --- Home (home.js) ---------------------------------------------------------- */
+.home-canvas { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; image-rendering: pixelated; background: #0b0716; }
+.home-canvas[hidden] { display: none; }
+.home-panel, .embark-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 12; width: min(720px, 94vw); max-height: 88vh; overflow: auto; padding: 18px 20px 14px; border-radius: 14px; background: rgba(15, 10, 30, 0.95); color: #f1e9ff; font: 15px/1.45 system-ui, sans-serif; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14), 0 14px 40px rgba(0, 0, 0, 0.55); }
+.home-panel[hidden], .embark-panel[hidden] { display: none; }
+.home-panel h2, .embark-panel h2 { margin: 0 0 8px; color: #fff; font-size: 1.4rem; }
+.home-text { margin: 0 0 12px; color: #d8ccff; }
+.pet-art { image-rendering: pixelated; }
+.npc-card canvas.pet-art { width: 88px; height: 72px; }
+.npc-card.chosen { border-color: #ffd23f; box-shadow: 0 0 0 2px rgba(255, 210, 63, 0.35); }
+.home-decor { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.home-decor-item { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-radius: 8px; background: #1d1538; cursor: pointer; }
+.home-decor-item span { color: #b8a9e6; font-size: 13px; }
+
+/* --- The portal: choose your class (embark.js) --------------------------------- */
+.embark-kicker { margin: 0; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff9de2; }
+.embark-journey { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0 14px; }
+.embark-zone { padding: 3px 10px; border-radius: 999px; background: #2a2050; font-weight: 600; font-size: 13px; }
+.embark-arrow { color: #8a7ac0; }
+.embark-classes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+.embark-class { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 2px solid #3d3366; border-radius: 12px; background: #1a1330; color: #f4f0ff; text-align: left; font: 14px/1.35 system-ui, sans-serif; cursor: pointer; }
+.embark-class:hover, .embark-class.chosen { border-color: var(--class-color, #ffd23f); box-shadow: 0 0 0 2px color-mix(in srgb, var(--class-color, #ffd23f) 40%, transparent); }
+.embark-class strong { font-size: 1.15rem; color: var(--class-color, #fff); }
+.embark-class em { color: #c4b5fd; font-size: 12px; }
+.embark-book { display: flex; gap: 3px; flex-wrap: wrap; }
+.embark-book canvas { width: 24px; height: 24px; image-rendering: pixelated; border-radius: 4px; background: #0f0a1e; }
+.embark-kit { font-size: 11px; color: #b9b0d8; }
+.embark-book canvas.signature { outline: 2px solid #ffd23f; }
+@media (max-width: 640px) { .embark-classes { grid-template-columns: 1fr; } }
+
+.unlock-art { display: block; margin: 4px auto 10px; width: 132px; height: 108px; image-rendering: pixelated; }
+/* spells explained: the rules card lists them; a coach bubble points at the bar in the first battles */
+.boss-spells { margin: 4px 0 12px; padding: 8px 10px; border-radius: 10px; background: rgba(93, 75, 153, 0.25); text-align: left; font-size: 13px; }
+.boss-spells-title { margin: 0 0 6px; color: #ffd23f; font-weight: 700; font-size: 12px; letter-spacing: 0.04em; }
+.boss-spell { display: grid; grid-template-columns: 32px 22px 1fr; gap: 8px; align-items: start; margin: 4px 0; }
+.boss-spell canvas { width: 32px; height: 32px; image-rendering: pixelated; }
+.boss-spell kbd { padding: 1px 6px; border-radius: 5px; background: #ffd23f; color: #1b1028; font: 800 13px/1.5 system-ui, sans-serif; text-align: center; }
+.boss-spell em { display: block; color: #b8e6ff; font-style: normal; font-size: 12px; }
+.boss-spells-passive { margin: 6px 0 0; color: #c4b5fd; font-size: 12px; }
+.spell-coach { position: absolute; right: 10px; bottom: 84px; z-index: 9; max-width: 340px; margin: 0; padding: 9px 12px; border-radius: 10px; background: #ffd23f; color: #1b1028; font: 500 13px/1.35 system-ui, sans-serif; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); animation: coach-in 0.4s ease; }
+.spell-coach[hidden] { display: none; }
+.spell-coach::after { content: ''; position: absolute; right: 36px; bottom: -8px; border: 8px solid transparent; border-bottom: 0; border-top-color: #ffd23f; }
+@keyframes coach-in { from { transform: translateY(10px); opacity: 0; } }
+
+.npc-card-when { color: #b8e6ff; font-style: normal; font-size: 12px; }
+.npc-card.spell-card { width: 210px; }
+/* 3D journeys: the WebGL view shows through the battle screen; the pixel HUD floats on top */
+body.in-battle.in-battle-3d #game { visibility: visible; }
+.boss-screen.three-d { background: transparent; }
+.boss-hud3d { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); image-rendering: pixelated; pointer-events: none; }
+.boss-hud3d[hidden] { display: none; }
+.boss-screen .boss-canvas[hidden] { display: none; }
+.battle-flash { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 40%, rgba(255, 40, 70, 0.55)); opacity: 0; }
+.battle-flash[hidden] { display: none; }
+.battle-flash.on { animation: battle-flash 0.45s ease-out; }
+@keyframes battle-flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+.boss-buttons .view-toggle { background: #2a2050; }
+
+/* --- Riftcards (cards/*): the table, the deck editor, packs ------------------------------- */
+.card-screen { position: absolute; inset: 0; z-index: 8; background: #0b0716; display: flex; align-items: center; justify-content: center; }
+.card-screen[hidden] { display: none; }
+.card-canvas { display: block; image-rendering: pixelated; cursor: pointer; }
+body.in-cards #game { visibility: hidden; }
+body.in-cards .hud, body.in-cards .health-hud, body.in-cards .tier-banner, body.in-cards .fps-badge, body.in-cards .test-toggle, body.in-cards .npc-prompt { display: none; }
+.card-card .boss-rules { text-align: left; }
+.deck-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 14; width: min(980px, 96vw); max-height: 92vh; overflow: auto; padding: 16px 18px 12px; border-radius: 14px; background: rgba(15, 10, 30, 0.97); color: #f1e9ff; font: 15px/1.45 system-ui, sans-serif; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14), 0 14px 40px rgba(0, 0, 0, 0.55); }
+.deck-panel[hidden] { display: none; }
+.deck-panel h2 { margin: 0 0 6px; color: #fff; font-size: 1.4rem; }
+.deck-panel h3 { margin: 10px 0 6px; color: #ffd23f; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+.deck-cards, .deck-collection { display: flex; flex-wrap: wrap; gap: 6px; }
+.deck-cards.pack { justify-content: center; gap: 14px; margin: 8px 0 12px; }
+.deck-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px; border: 2px solid transparent; border-radius: 8px; background: #1a1330; color: #f1e9ff; font: 600 12px system-ui, sans-serif; cursor: pointer; }
+.deck-card:hover, .deck-card:focus-visible { border-color: #ffd23f; outline: none; }
+.deck-card.full { opacity: 0.45; cursor: default; }
+.deck-card canvas { image-rendering: pixelated; display: block; }
+.deck-count { color: #b9b0d8; font-size: 11px; text-transform: capitalize; max-width: 150px; text-align: center; }
+.deck-card.pickable { padding: 8px; }
+.deck-card.r-rare { box-shadow: 0 0 12px rgba(74, 163, 255, 0.45); }
+.deck-card.r-epic { box-shadow: 0 0 14px rgba(176, 107, 255, 0.55); }
+.deck-card.r-legendary { box-shadow: 0 0 18px rgba(255, 207, 58, 0.7); }
+.deck-card.reveal { animation: card-reveal 0.6s ease-out both; }
+@keyframes card-reveal { 0% { opacity: 0; transform: translateY(18px) rotateY(90deg); } 100% { opacity: 1; transform: none; } }
+body.in-deck .npc-prompt { display: none; }
+.deck-words { max-width: 170px; color: #d8cff5; font: 12px/1.35 system-ui, sans-serif; text-align: center; }
+.deck-status { margin: 4px 0 8px; font-size: 13px; }
+.deck-status.ok { color: #8ef0a0; }
+.deck-status.bad { color: #ff9aa8; }
+.faction-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
+.faction-tile { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 8px; border: 2px solid transparent; border-radius: 10px; background: #1a1330; color: #f1e9ff; font: 13px/1.35 system-ui, sans-serif; cursor: pointer; text-align: center; }
+.faction-tile:hover, .faction-tile:focus-visible { border-color: #ffd23f; outline: none; transform: translateY(-2px); }
+.faction-tile canvas { image-rendering: pixelated; margin-bottom: 4px; }
+.faction-tile strong { font-size: 15px; color: #fff; }
+.faction-zone { color: #ffd23f; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+.faction-about { color: #c9bfe8; }
+.faction-perk { color: #8ef0a0; font-size: 12px; }
+.faction-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.faction-tab { padding: 5px 10px; border: 2px solid #3a2d5a; border-radius: 999px; background: #1a1330; color: #d8cff5; font: 600 13px system-ui, sans-serif; cursor: pointer; }
+.faction-tab.on { border-color: #ffd23f; color: #fff; background: #2c2150; }
+.card-factions { font-size: 14px; color: #d8cff5; }
+@media (max-width: 760px) { .faction-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* the Ring and the ranch (ring/*) */
+.mon-card { min-width: 104px; }
+.mon-card.chosen { border-color: #ffd23f; background: #2c2150; box-shadow: 0 0 12px rgba(255, 210, 63, 0.45); }
+.mon-card canvas { image-rendering: pixelated; }
+.mon-type { padding: 0 6px; border-radius: 999px; color: #1b1028; font-size: 11px; font-weight: 700; }
+.mon-stats { color: #d8cff5; font-size: 11px; }
+.mon-strong { color: #8ef0a0; font-size: 11px; }
+.mon-note { color: #ffd23f; font-size: 12px; font-weight: 700; }
+.board-row { grid-template-columns: 1.4fr 0.8fr 0.8fr auto; }
+.board-gold { color: #ffd23f; font-weight: 700; }
+/* the tailor (town/tailorPanel.js) */
+.tailor-body { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: start; margin: 8px 0; }
+.tailor-preview { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.tailor-portrait { width: 200px; height: 240px; border-radius: 10px; }
+.tailor-sprites { display: flex; gap: 10px; }
+.tailor-sprite { image-rendering: pixelated; background: #2a2240; border-radius: 6px; }
+.tailor-row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.tailor-grid { display: grid; gap: 2px; width: 264px; padding: 4px; border-radius: 8px; background: #0e0a1c; touch-action: none; }
+.tailor-cell { aspect-ratio: 1; border: 0; border-radius: 2px; padding: 0; cursor: crosshair; }
+.tailor-cell:hover { outline: 2px solid #fff; }
+.tailor-pens { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; max-width: 230px; }
+.tailor-pen { width: 34px; height: 34px; border-radius: 8px; border: 2px solid #3a2d5a; cursor: pointer; font-size: 16px; color: #1b1028; }
+.tailor-pen.on { border-color: #ffd23f; box-shadow: 0 0 0 2px #ffd23f; }
+.tailor-presets { display: flex; flex-wrap: wrap; gap: 5px; max-width: 240px; }
+.tailor-presets button, .tailor-editor > button { padding: 4px 9px; border-radius: 999px; border: 1px solid #3a2d5a; background: #1a1330; color: #d8cff5; font: 600 12px system-ui, sans-serif; cursor: pointer; text-transform: capitalize; }
+.tailor-editor input[type=color] { width: 48px; height: 36px; border: 0; background: none; }
+@media (max-width: 760px) { .tailor-body { grid-template-columns: 1fr; } }
+/* the home arcade */
+.arcade-list { display: grid; gap: 4px; margin-bottom: 10px; }
+.arcade-row { display: grid; grid-template-columns: 1.3fr 1fr repeat(3, 34px); gap: 6px; align-items: center; padding: 4px 8px; border-radius: 8px; background: #1a1330; }
+.arcade-row.locked { opacity: 0.5; }
+.arcade-name { font-weight: 600; }
+.arcade-rec { color: #b9b0d8; font-size: 12px; }
+.arcade-row button { padding: 4px 0; border: 1px solid #5d4b99; border-radius: 7px; background: #231a42; color: #fff; font: 600 12px system-ui, sans-serif; cursor: pointer; }
+.arcade-row button:hover:not([disabled]) { background: #ffd23f; color: #1b1028; }
+.arcade-row button[disabled] { cursor: default; }
+/* options */
+.options-toggle { position: absolute; top: 10px; right: 132px; z-index: 9; width: 32px; height: 30px; border: 1px solid #5b4b8a; border-radius: 999px; background: rgba(20, 14, 40, 0.85); color: #f1e9ff; font: 600 15px system-ui, sans-serif; cursor: pointer; }
+body:not(:has(.test-toggle)) .options-toggle { right: 10px; }
+body.in-battle .options-toggle, body.in-cards .options-toggle, body.in-menu .options-toggle { display: none; }
+.options-panel { position: absolute; top: 48px; right: 10px; z-index: 15; width: min(380px, 94vw); padding: 12px 16px; border-radius: 12px; background: rgba(15, 10, 30, 0.96); color: #f1e9ff; font: 14px/1.4 system-ui, sans-serif; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }
+.options-panel[hidden] { display: none; }
+.options-panel h2 { margin: 0 0 6px; font-size: 1.2rem; }
+.options-panel h3 { margin: 10px 0 4px; color: #ffd23f; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+.opt-row { display: grid; grid-template-columns: 70px 1fr 40px; gap: 8px; align-items: center; margin: 4px 0; }
+.opt-row.opt-check { grid-template-columns: 22px 1fr; align-items: start; }
+.opt-row em { display: block; color: #b9b0d8; font-style: normal; font-size: 12px; }
+.opt-value { color: #b9b0d8; font-size: 12px; text-align: right; }
+.embark-panel .npc-buttons button.king { background: #3a1d5c; border-color: #ffcf3a; color: #ffcf3a; }
+/* every mini-game's keys, shown the same way (battle/keys.js) */
+.battle-keys { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 9; margin: 0; padding: 4px 10px; border-radius: 999px; background: rgba(11, 7, 22, 0.72); color: #e6ddff; font: 12px/1.3 system-ui, sans-serif; white-space: nowrap; pointer-events: none; }
+.battle-keys kbd, .boss-keys kbd { display: inline-block; padding: 0 5px; border: 1px solid #6d5cab; border-bottom-width: 2px; border-radius: 4px; background: #231a42; color: #ffd23f; font: 600 11px/1.5 system-ui, sans-serif; }
+.boss-keys { margin: 6px 0 10px; color: #cfc4f2; font-size: 13px; }
+/* touch controls (touch.js) */
+.touch-pad { position: fixed; inset: auto 0 0 0; z-index: 30; display: flex; justify-content: space-between; align-items: flex-end; padding: 10px 14px; pointer-events: none; }
+.touch-btn { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 50%; background: rgba(20, 14, 40, 0.55); color: #fff; font: 700 18px system-ui, sans-serif; }
+.touch-btn.on { background: rgba(255, 210, 63, 0.7); color: #1b1028; }
+.touch-dpad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 2px; }
+.touch-dpad .touch-btn { width: 56px; height: 56px; border-radius: 12px; }
+.touch-dpad .up { grid-column: 2; grid-row: 1; } .touch-dpad .left { grid-column: 1; grid-row: 2; } .touch-dpad .right { grid-column: 3; grid-row: 2; } .touch-dpad .down { grid-column: 2; grid-row: 3; }
+.touch-actions { display: grid; grid-template-columns: repeat(3, 62px); grid-template-rows: repeat(2, 62px); gap: 6px; }
+.touch-actions .touch-btn { width: 62px; height: 62px; }
+.touch-actions .a { grid-column: 3; grid-row: 2; background: rgba(255, 79, 216, 0.55); }
+.touch-actions .b { grid-column: 2; grid-row: 2; } .touch-actions .k { grid-column: 3; grid-row: 1; } .touch-actions .e { grid-column: 2; grid-row: 1; font-size: 15px; } .touch-actions .esc { grid-column: 1; grid-row: 2; font-size: 15px; }
+body.has-touch .spell-bar { bottom: 150px; }
+body.has-touch .fps-badge { bottom: 190px; }

@@ -1,15 +1,16 @@
 import test from 'node:test';
+import { ZONE_IDS } from '../src/world/zones.js';
 import assert from 'node:assert/strict';
-import { createSurface, rect, blit, outline, text, textWidth, present, toRGBA, ellipse, solidMap } from '../src/pixel.js';
-import { buildScheme, checkScheme, heroBaseColors, bossBaseColors, minionBaseColors, hueShift, THEME_NAMES, SLOT, HR, rgbToHsl } from '../src/palette.js';
-import { paintHero, createHeroSheet, HERO_W, HERO_H } from '../src/heroSprite.js';
-import { generateMonster, monsterRecipe, checkMonster, ROLES } from '../src/monsters.js';
-import { itemSprite } from '../src/rewardScreen.js';
-import { createView, drawBattle } from '../src/battle/draw.js';
-import { MODES } from '../src/battle/index.js';
-import { makeBoss, bossStats } from '../src/bosses.js';
-import { DEFAULT_CHARACTERS, STYLE_OPTIONS, UNLOCKABLES, normalizeCharacter, randomCharacter } from '../src/character.js';
-import { mulberry32 } from '../src/levelGenerator.js';
+import { createSurface, rect, blit, outline, text, textWidth, present, toRGBA, ellipse, solidMap } from '../src/engine/pixel.js';
+import { buildScheme, checkScheme, heroBaseColors, bossBaseColors, minionBaseColors, hueShift, THEME_NAMES, SLOT, HR, rgbToHsl } from '../src/engine/palette.js';
+import { paintHero, createHeroSheet, HERO_W, HERO_H } from '../src/characters/heroSprite.js';
+import { generateMonster, monsterRecipe, checkMonster, ROLES } from '../src/characters/monsters.js';
+import { itemSprite } from '../src/ui/rewardScreen.js';
+import { createView, drawBattle } from '../src/games/kit/view.js';
+import { MODES } from '../src/games/index.js';
+import { makeBoss, bossStats } from '../src/progression/bosses.js';
+import { DEFAULT_CHARACTERS, STYLE_OPTIONS, UNLOCKABLES, normalizeCharacter, randomCharacter } from '../src/characters/character.js';
+import { mulberry32 } from '../src/levels/generator.js';
 
 const opaque = s => s.buf.reduce((n, c) => n + (c ? 1 : 0), 0);
 
@@ -128,10 +129,10 @@ test('monsters: every seed gives a checked, symmetric-ish creature; seeds differ
   assert.deepEqual(monsterRecipe(5, 'walker'), monsterRecipe(5, 'walker'));
 });
 
-test('every battle scene draws without errors in all regions, from the intro to the victory lap', () => {
+test('every battle scene draws without errors in every zone, from the intro to the victory lap', () => {
   const design = randomCharacter(mulberry32(3));
   for (const mode of Object.keys(MODES)) {
-    for (const tier of ['meadow', 'canyon', 'alpine', 'starlit']) {
+    for (const tier of ZONE_IDS) {
       const boss = makeBoss({ runSeed: 9, index: 6, tier, mode, check: false });
       const g = MODES[mode].create(boss, { seed: 2 });
       const view = createView({ boss, design, seed: 2 });

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLevel } from '../src/levelBuilder.js';
-import { levels, TIERS } from '../src/levels.js';
-import { auditLevel } from '../src/levelAudit.js';
-import { auditFun, funRequirements, designDifficulty, FUN_RULES } from '../src/funAudit.js';
-import { generateLevel } from '../src/levelGenerator.js';
+import { createLevel } from '../src/levels/builder.js';
+import { levels, TIERS } from '../src/levels/index.js';
+import { auditLevel } from '../src/levels/audit.js';
+import { auditFun, funRequirements, designDifficulty, FUN_RULES } from '../src/levels/funAudit.js';
+import { generateLevel } from '../src/levels/generator.js';
 
 const codes = result => result.issues.map(i => i.code);
 const fun = (level, d) => auditFun(level, auditLevel(level), d);

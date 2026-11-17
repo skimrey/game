@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPlayer, stepPlayer, pushPlayer, ABILITIES } from '../src/physics.js';
-import { createLevel } from '../src/levelBuilder.js';
-import { levels, TIERS } from '../src/levels.js';
-import { auditLevel, decodeInput, DT, topOf } from '../src/levelAudit.js';
-import { createSession, RULES } from '../src/session.js';
-import { enemyPosition, enemyBounds, patrolOf, PATROL_INSET } from '../src/enemies.js';
-import { auditEncounters, encounterPositions, ENCOUNTER_RULES } from '../src/encounterAudit.js';
+import { createPlayer, stepPlayer, pushPlayer, ABILITIES } from '../src/world/physics.js';
+import { createLevel } from '../src/levels/builder.js';
+import { levels, TIERS } from '../src/levels/index.js';
+import { auditLevel, decodeInput, DT, topOf } from '../src/levels/audit.js';
+import { createSession, RULES } from '../src/world/session.js';
+import { enemyPosition, enemyBounds, patrolOf, PATROL_INSET } from '../src/world/enemies.js';
+import { auditEncounters, encounterPositions, ENCOUNTER_RULES } from '../src/levels/encounterAudit.js';
 
 const flat = { spawn: { x: 0, y: 0.5, z: 0 }, platforms: [{ x: 0, y: 0, z: 0, width: 40, height: 1, depth: 40 }], goal: { x: 15, y: 0.5, z: 15, radius: 0.5 } };
 const run = (player, level, input, ticks) => { for (let i = 0; i < ticks; i++) stepPlayer(player, level, input, DT); };
